@@ -1,4 +1,5 @@
-﻿using DokanNet;
+﻿using System.Collections.Concurrent;
+using DokanNet;
 using Microsoft.Extensions.Options;
 using Minio;
 using Minio.DataModel;
@@ -6,11 +7,18 @@ using Storage.Host.Options;
 using System.Reactive.Linq;
 using System.Security.AccessControl;
 using System.Text;
+using Storage.Host.Caches;
+using System.Drawing;
+using System;
 
 namespace Storage.Host.Storage;
 
 public class MinioService : IStorageService
 {
+
+
+    private readonly ConcurrentDictionary<string, MinioWriteCache> _writeCache = new();
+
     private readonly MinioClient _client;
     private readonly MinioOptions _minio;
     private readonly MemoryCaching _memoryCaching;
@@ -34,7 +42,6 @@ public class MinioService : IStorageService
             makeBucketArgs.WithBucket(_minio.BucketName);
             _client.MakeBucketAsync(makeBucketArgs).GetAwaiter().GetResult();
         }
-
     }
 
     private void Info(string? message, params object?[] args)
@@ -92,6 +99,7 @@ public class MinioService : IStorageService
 
         Info("{0}=> fileName:{1}  IsDirectory:{2}", nameof(DeleteDirectory), fileName, info.IsDirectory);
 
+        fileName += "/";
         if (ExistDirectory(fileName))
         {
             return NtStatus.DirectoryNotEmpty;
@@ -149,7 +157,6 @@ public class MinioService : IStorageService
             Error("MoveFile exception :{0} oldName:{1} newName：{newName}", exception, oldName, newName);
             return false;
         }
-
     }
 
     public bool MoveDirectory(string path, string dest)
@@ -159,7 +166,7 @@ public class MinioService : IStorageService
 
         var cpSrcArgs = new CopySourceObjectArgs()
             .WithBucket(_minio.BucketName)
-            .WithObject(path+'/')
+            .WithObject(path + '/')
             .WithCopyConditions(null)
             .WithServerSideEncryption(null);
 
@@ -205,45 +212,35 @@ public class MinioService : IStorageService
             return DokanResult.Success;
         }
 
-        var filesInformation = _memoryCaching.Get<FileInformation?>(fileName + "/GetFileInformation");
-        if (filesInformation == null)
+        var o = new ListObjectsArgs();
+        o.WithBucket(_minio.BucketName);
+        o.WithPrefix(fileName);
+        o.WithRecursive(false);
+
+        Item? data = null;
+        try
         {
-            var o = new ListObjectsArgs();
-            o.WithBucket(_minio.BucketName);
-            o.WithPrefix(fileName);
-            o.WithRecursive(false);
-
-            Item data = null;
-            try
-            {
-                data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
-            }
-            catch (Exception exception)
-            {
-                Error("GetFileInformation exception :{0} fileName:{1} ", exception, fileName);
-            }
-
-            if (data == null)
-            {
-                fileInfo = new FileInformation();
-                return DokanResult.FileNotFound;
-            }
-
-            fileInfo = new FileInformation
-            {
-                Attributes = data.IsDir ? FileAttributes.Directory : FileAttributes.Normal,
-                LastWriteTime = data.LastModifiedDateTime,
-                FileName = data.Key.TrimEnd('/'),
-                CreationTime = data.LastModifiedDateTime,
-                Length = (long)data.Size
-            };
-
-            _memoryCaching.Add(fileName + "GetFileInformation", fileInfo);
+            data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
         }
-        else
+        catch (Exception exception)
         {
-            fileInfo = (FileInformation)filesInformation;
+            Error("GetFileInformation exception :{0} fileName:{1} ", exception, fileName);
         }
+
+        if (data == null)
+        {
+            fileInfo = new FileInformation();
+            return DokanResult.FileNotFound;
+        }
+
+        fileInfo = new FileInformation
+        {
+            Attributes = data.IsDir ? FileAttributes.Directory : FileAttributes.Normal,
+            LastWriteTime = data.LastModifiedDateTime,
+            FileName = data.Key.TrimEnd('/'),
+            CreationTime = data.LastModifiedDateTime,
+            Length = (long)data.Size
+        };
 
         return DokanResult.Success;
     }
@@ -282,7 +279,7 @@ public class MinioService : IStorageService
     {
         GetPath(ref fileName);
 
-        Info("{0}=> filePath:{1}  searchPattern:{2}", nameof(ReadFile), fileName, offset);
+        Info("{0}=> filePath:{1}  buffer:{2}  offset:{3}", nameof(ReadFile), fileName, buffer.Length, offset);
 
         var obj = new GetObjectArgs();
         obj.WithBucket(_minio.BucketName);
@@ -313,23 +310,102 @@ public class MinioService : IStorageService
     public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
     {
         GetPath(ref fileName);
-        Info("{0}=> filePath:{1}  searchPattern:{2}", nameof(WriteFile), fileName, offset);
+        //Info("{0}=> fileName:{1}  buffer:{2} offset :{3}", nameof(WriteFile), fileName, buffer.Length, offset);
         bytesWritten = 0;
 
-        if (!info.PagingIo)
+        var put = GetPutObject(fileName, buffer.Length);
+
+        // 设置上传切片大小
+        const int size = 1024 * 1024 * 5;
+        if (offset == 0)
         {
-            var put = new PutObjectArgs();
-            put.WithBucket(_minio.BucketName);
-            put.WithObject(fileName);
-            put.WithObjectSize(buffer.Length);
-            put.WithStreamData(new MemoryStream(buffer));
-            _client.PutObjectAsync(put).GetAwaiter().GetResult();
+            var multipartUploadArgs = new NewMultipartUploadPutArgs()
+                .WithBucket(_minio.BucketName)
+                .WithContentType(null)
+                .WithObject(fileName);
+
+            var uploadId = _client.NewMultipartUploadAsync(multipartUploadArgs).GetAwaiter().GetResult();
+
+            if (buffer.Length < size)
+            {
+                var memoryStream = new MemoryStream();
+                memoryStream.Write(buffer);
+                var writeCache = new MinioWriteCache
+                {
+                    UploadId = uploadId,
+                    MemoryStream = memoryStream,
+                    Etags = new Dictionary<int, string>()
+                };
+                _writeCache.TryAdd(fileName, writeCache);
+            }
+            else
+            {
+                var putObjectArgs = new PutObjectArgs(put)
+                    .WithRequestBody(buffer)
+                    .WithUploadId(uploadId)
+                    .WithPartNumber(1);
+
+                var etag = _client.PutObjectSinglePartAsync(putObjectArgs).GetAwaiter().GetResult();
+
+                var writeCache = new MinioWriteCache
+                {
+                    UploadId = uploadId,
+                    Etags =
+                    {
+                        [1] = etag
+                    }
+                };
+                _writeCache.TryAdd(fileName, writeCache);
+            }
+        }
+        else
+        {
+            _writeCache.TryGetValue(fileName, out var writeCache);
+
+            writeCache!.MemoryStream.Write(buffer);
+
+            //WriteCache(writeCache, put, size);
         }
 
         bytesWritten = buffer.Length;
 
         return NtStatus.Success;
     }
+
+    private void WriteCache(MinioWriteCache writeCache, PutObjectPartArgs put, long size, bool newMemory = true)
+    {
+        if (writeCache.MemoryStream.Length >= size)
+        {
+            writeCache!.PartNumber += 1;
+            var putObjectArgs = new PutObjectArgs(put)
+                .WithRequestBody(writeCache.MemoryStream.ToArray())
+                .WithUploadId(writeCache.UploadId)
+                .WithObjectSize(writeCache.MemoryStream.Length)
+                .WithPartNumber(writeCache.PartNumber);
+
+            var etag = _client.PutObjectSinglePartAsync(putObjectArgs).GetAwaiter().GetResult();
+            writeCache.Etags[writeCache.PartNumber] = etag;
+            writeCache.UpdateTime = DateTime.Now;
+
+            writeCache.MemoryStream.Close();
+            if (newMemory)
+            {
+                writeCache.MemoryStream = new MemoryStream();
+            }
+        }
+    }
+
+    private PutObjectPartArgs GetPutObject(string fileName, long length)
+    {
+        var put = new PutObjectPartArgs();
+
+        put.WithBucket(_minio.BucketName)
+            .WithObject(fileName)
+            .WithObjectSize(length);
+
+        return put;
+    }
+
 
     public bool CreateFile(string path)
     {
@@ -352,7 +428,6 @@ public class MinioService : IStorageService
         _memoryCaching.Remove(path);
 
         return true;
-
     }
 
     public NtStatus GetFileSecurity(string fileName, out FileSystemSecurity security, AccessControlSections sections,
@@ -365,32 +440,26 @@ public class MinioService : IStorageService
     public bool ExistFile(string path)
     {
         GetPath(ref path);
-        Info("{0}=> path:{1} ", nameof(ExistFile), path);
-
         if (string.IsNullOrEmpty(path))
         {
             return true;
         }
 
-        var value = _memoryCaching.Get<Item?>(path + "ExistFile");
-        if (value == null)
-        {
-            var o = new ListObjectsArgs();
-            o.WithBucket(_minio.BucketName);
-            o.WithPrefix(path);
-            try
-            {
-                var data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
-                _memoryCaching.Add(path + "ExistFile", data);
-                return data?.IsDir == false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        Info("{0}=> path:{1} ", nameof(ExistFile), path);
 
-        return value.IsDir == false;
+        var o = new ListObjectsArgs();
+        o.WithBucket(_minio.BucketName);
+        o.WithPrefix(path);
+        try
+        {
+            var data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
+            _memoryCaching.Add(path + "ExistFile", data);
+            return data?.IsDir == false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public bool CreateDirectory(string path)
@@ -417,10 +486,12 @@ public class MinioService : IStorageService
             Error("CreateDirectory Exception :{0} path:{1} ", exception, path);
             return false;
         }
+
         return true;
     }
 
-    public void GetDiskFreeSpace(out long freeBytesAvailable, out long totalNumberOfBytes, out long totalNumberOfFreeBytes,
+    public void GetDiskFreeSpace(out long freeBytesAvailable, out long totalNumberOfBytes,
+        out long totalNumberOfFreeBytes,
         IDokanFileInfo info)
     {
         totalNumberOfBytes = (long)1024 * 1024 * 1024 * 1024;
@@ -433,7 +504,7 @@ public class MinioService : IStorageService
     public void GetVolumeInformation(out string volumeLabel, out FileSystemFeatures features, out string fileSystemName,
         out uint maximumComponentLength, IDokanFileInfo info)
     {
-        volumeLabel = "Token";
+        volumeLabel = _minio.VolumeLabel;
         fileSystemName = "NTFS";
         maximumComponentLength = 256;
         features = FileSystemFeatures.CasePreservedNames | FileSystemFeatures.CaseSensitiveSearch |
@@ -441,17 +512,43 @@ public class MinioService : IStorageService
                    FileSystemFeatures.UnicodeOnDisk;
     }
 
+    public async void SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime,
+        DateTime? lastWriteTime,
+        IDokanFileInfo info)
+    {
+        GetPath(ref fileName);
+
+        if (_writeCache.TryGetValue(fileName, out var cache))
+        {
+            _writeCache.TryGetValue(fileName, out var writeCache);
+
+            WriteCache(writeCache!, GetPutObject(fileName, cache.MemoryStream.Length),0, false);
+
+            var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
+                .WithBucket(_minio.BucketName)
+                .WithObject(fileName)
+                .WithUploadId(cache.UploadId)
+                .WithETags(cache.Etags);
+
+            await _client.CompleteMultipartUploadAsync(completeMultipartUploadArgs, CancellationToken.None)
+                .ConfigureAwait(false);
+
+            _writeCache.Remove(fileName, out _);
+        }
+    }
+
     public bool ExistDirectory(string path)
     {
         GetPath(ref path);
 
-        Info("{0}=> path:{1} ", nameof(ExistDirectory), path);
 
         // 当path为空是说明查询的是根目录 根目录一定存在
         if (string.IsNullOrEmpty(path))
         {
             return true;
         }
+
+        Info("{0}=> path:{1} ", nameof(ExistDirectory), path);
 
         var o = new ListObjectsArgs();
         o.WithBucket(_minio.BucketName);
@@ -463,7 +560,6 @@ public class MinioService : IStorageService
         }
         catch (Exception exception)
         {
-
             return false;
         }
     }

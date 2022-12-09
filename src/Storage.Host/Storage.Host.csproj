@@ -8,10 +8,14 @@
 
 	<ItemGroup>
 		<PackageReference Include="DokanNet" Version="2.0.5.1" />
-		<PackageReference Include="Minio" Version="4.0.6" />
 	</ItemGroup>
 
 	<ItemGroup>
 	  <Folder Include="Options\" />
+	  <Folder Include="Caches\" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\..\..\..\minio-dotnet\Minio\Minio.csproj" />
 	</ItemGroup>
 </Project>

@@ -144,4 +144,7 @@ public interface IStorageService
     /// <param name="info"></param>
     void GetVolumeInformation(out string volumeLabel, out FileSystemFeatures features, out string fileSystemName,
         out uint maximumComponentLength, IDokanFileInfo info);
+
+    void SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime, DateTime? lastWriteTime,
+        IDokanFileInfo info);
 }

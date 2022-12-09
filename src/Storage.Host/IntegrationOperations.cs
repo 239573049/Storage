@@ -1,5 +1,6 @@
 ﻿using DokanNet;
 using System.Security.AccessControl;
+using DokanOptions = Storage.Host.Options.DokanOptions;
 using FileAccess = DokanNet.FileAccess;
 
 namespace Storage.Host;
@@ -26,9 +27,9 @@ public class IntegrationOperations : IDokanOperations
         FileAttributes attributes, IDokanFileInfo info)
     {
         string fName = fileName.ToLower();
-        if (fName.StartsWith("\\.") || fName.IndexOf("\\.", StringComparison.Ordinal) >= 0
-                                    || fName.IndexOf("desktop.ini", StringComparison.Ordinal) > 0 ||
-                                    fName.IndexOf("autorun.ini", StringComparison.Ordinal) > 0) return DokanResult.FileNotFound;
+        if (fName.IndexOf("desktop.ini", StringComparison.Ordinal) > 0 ||
+                                    fName.IndexOf("autorun.ini", StringComparison.Ordinal) > 0)
+            return DokanResult.FileNotFound;
 
 
         var result = DokanResult.Success;
@@ -43,6 +44,7 @@ public class IntegrationOperations : IDokanOperations
                         {
                             return DokanResult.AccessDenied;
                         }
+
                         return DokanResult.Success;
 
                     case FileMode.CreateNew:
@@ -68,7 +70,6 @@ public class IntegrationOperations : IDokanOperations
             try
             {
                 pathExists = (_storageService.ExistDirectory(fileName) || _storageService.ExistFile(fileName));
-
             }
             catch (IOException)
             {
@@ -80,18 +81,16 @@ public class IntegrationOperations : IDokanOperations
 
                     if (pathExists)
                     {
-
                         if (readWriteAttributes || pathIsDirectory)
                         {
                             if (pathIsDirectory && (access & DokanNet.FileAccess.Delete) ==
                                                 DokanNet.FileAccess.Delete
                                                 && (access & DokanNet.FileAccess.Synchronize) !=
                                                 DokanNet.FileAccess.Synchronize)
-                                //It is a DeleteFile request on a directory
                                 return DokanResult.AccessDenied;
 
                             info.IsDirectory = pathIsDirectory;
-                            info.Context = new object();
+                            //info.Context = new object();
 
                             return DokanResult.Success;
                         }
@@ -107,9 +106,11 @@ public class IntegrationOperations : IDokanOperations
                 case FileMode.OpenOrCreate:
                 case FileMode.CreateNew:
                     if (pathExists)
+                    {
                         return DokanResult.FileExists;
-                    else
-                        _storageService.CreateFile(fileName);
+                    }
+
+                    _storageService.CreateFile(fileName);
                     break;
 
                 case FileMode.Truncate:
@@ -119,7 +120,6 @@ public class IntegrationOperations : IDokanOperations
                 default:
                     return DokanResult.NotImplemented;
             }
-
         }
 
         return result;
@@ -127,12 +127,11 @@ public class IntegrationOperations : IDokanOperations
 
     public void Cleanup(string fileName, IDokanFileInfo info)
     {
-        (info.Context as FileStream)?.Dispose();
-        info.Context = null;
+        //(info.Context as FileStream)?.Dispose();
+        //info.Context = null;
 
         if (info.DeleteOnClose)
         {
-
             if (info.IsDirectory)
             {
                 _storageService.DeleteDirectory(fileName, info);
@@ -146,12 +145,12 @@ public class IntegrationOperations : IDokanOperations
 
     public void CloseFile(string fileName, IDokanFileInfo info)
     {
-        (info.Context as FileStream)?.Dispose();
-        info.Context = null;
+        //(info.Context as FileStream)?.Dispose();
+        //info.Context = null;
     }
 
     public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
-    { 
+    {
         if (info.Context == null)
         {
             return _storageService.ReadFile(fileName, buffer, out bytesRead, offset, info);
@@ -159,34 +158,27 @@ public class IntegrationOperations : IDokanOperations
 
         bytesRead = 0;
 
-        if (info.Context is not FileStream stream) return DokanResult.Success;
+        //if (info.Context is not FileStream stream) return DokanResult.Success;
 
-        lock (stream)
-        {
-            stream.Position = offset;
-            bytesRead = stream.Read(buffer, 0, buffer.Length);
-        }
+        //lock (stream)
+        //{
+        //    stream.Position = offset;
+        //    bytesRead = stream.Read(buffer, 0, buffer.Length);
+        //}
 
         return DokanResult.Success;
     }
 
     public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
     {
-        if (info.Context == null)
-        {
-            return _storageService.WriteFile(fileName, buffer, out bytesWritten, offset, info);
-        }
-
-        bytesWritten = 0;
-        return NtStatus.Error;
+        return _storageService.WriteFile(fileName, buffer, out bytesWritten, offset, info);
     }
 
     public NtStatus FlushFileBuffers(string fileName, IDokanFileInfo info)
     {
-
         try
         {
-            ((FileStream)(info.Context))?.Flush();
+            //((FileStream)(info.Context))?.Flush();
             return DokanResult.Success;
         }
         catch (IOException)
@@ -197,7 +189,6 @@ public class IntegrationOperations : IDokanOperations
 
     public NtStatus GetFileInformation(string fileName, out FileInformation fileInfo, IDokanFileInfo info)
     {
-
         return _storageService.GetFileInformation(fileName, out fileInfo, info);
     }
 
@@ -206,7 +197,8 @@ public class IntegrationOperations : IDokanOperations
         return _storageService.FindFiles(fileName, "*", out files);
     }
 
-    public NtStatus FindFilesWithPattern(string fileName, string searchPattern, out IList<FileInformation> files, IDokanFileInfo info)
+    public NtStatus FindFilesWithPattern(string fileName, string searchPattern, out IList<FileInformation> files,
+        IDokanFileInfo info)
     {
         return _storageService.FindFiles(fileName, searchPattern, out files);
     }
@@ -216,9 +208,12 @@ public class IntegrationOperations : IDokanOperations
         return DokanResult.Success;
     }
 
-    public NtStatus SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime, DateTime? lastWriteTime,
+    public NtStatus SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime,
+        DateTime? lastWriteTime,
         IDokanFileInfo info)
     {
+        _storageService.SetFileTime(fileName, creationTime, lastAccessTime, lastWriteTime, info);
+
         return DokanResult.Success;
     }
 
@@ -234,8 +229,8 @@ public class IntegrationOperations : IDokanOperations
 
     public NtStatus MoveFile(string oldName, string newName, bool replace, IDokanFileInfo info)
     {
-        (info.Context as FileStream)?.Dispose();
-        info.Context = null;
+        //(info.Context as FileStream)?.Dispose();
+        //info.Context = null;
 
         bool pathExists = _storageService.ExistDirectory(oldName);
         bool fileExists = _storageService.ExistFile(oldName);
@@ -293,7 +288,7 @@ public class IntegrationOperations : IDokanOperations
     {
         try
         {
-            ((FileStream)(info.Context))?.Lock(offset, length);
+            //((FileStream)(info.Context))?.Lock(offset, length);
             return DokanResult.Success;
         }
         catch (IOException)
@@ -306,7 +301,7 @@ public class IntegrationOperations : IDokanOperations
     {
         try
         {
-            ((FileStream)(info.Context))?.Unlock(offset, length);
+            //((FileStream)(info.Context))?.Unlock(offset, length);
             return DokanResult.Success;
         }
         catch (IOException)
@@ -315,7 +310,8 @@ public class IntegrationOperations : IDokanOperations
         }
     }
 
-    public NtStatus GetDiskFreeSpace(out long freeBytesAvailable, out long totalNumberOfBytes, out long totalNumberOfFreeBytes,
+    public NtStatus GetDiskFreeSpace(out long freeBytesAvailable, out long totalNumberOfBytes,
+        out long totalNumberOfFreeBytes,
         IDokanFileInfo info)
     {
         totalNumberOfBytes = (long)1024 * 1024 * 1024 * 1024;
@@ -327,15 +323,12 @@ public class IntegrationOperations : IDokanOperations
         return NtStatus.Success;
     }
 
-    public NtStatus GetVolumeInformation(out string volumeLabel, out FileSystemFeatures features, out string fileSystemName,
+    public NtStatus GetVolumeInformation(out string volumeLabel, out FileSystemFeatures features,
+        out string fileSystemName,
         out uint maximumComponentLength, IDokanFileInfo info)
     {
-        volumeLabel = "Token";
-        fileSystemName = "NTFS";
-        maximumComponentLength = 256;
-        features = FileSystemFeatures.CasePreservedNames | FileSystemFeatures.CaseSensitiveSearch |
-                   FileSystemFeatures.PersistentAcls | FileSystemFeatures.SupportsRemoteStorage |
-                   FileSystemFeatures.UnicodeOnDisk;
+        _storageService.GetVolumeInformation(out volumeLabel, out features, out fileSystemName,
+            out maximumComponentLength, info);
 
         return DokanResult.Success;
     }
