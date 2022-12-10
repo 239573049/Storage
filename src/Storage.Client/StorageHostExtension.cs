@@ -1,4 +1,6 @@
 ﻿using DokanNet;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Storage.Host.Options;
 using Storage.Host.Storage;
@@ -11,9 +13,8 @@ public static class StorageHostExtension
     public static IServiceCollection AddStorage(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<IDokanOperations, IntegrationOperations>();
-        services.AddHttpContextAccessor();
 
-        var section = configuration.GetSection(nameof(Options.DokanOptions));
+        var section = configuration.GetSection(nameof(DokanOptions));
         services.Configure<Options.DokanOptions>(section);
 
         return services;
@@ -29,16 +30,16 @@ public static class StorageHostExtension
         return services;
     }
 
-    public static void UseDokan(this IApplicationBuilder app)
+    public static void UseDokan(this IServiceProvider app)
     {
         Task.Factory.StartNew(() =>
         {
-            var dokanOptions = app.ApplicationServices.GetRequiredService<IOptions<Options.DokanOptions>>().Value;
+            var dokanOptions = app.GetRequiredService<IOptions<Options.DokanOptions>>().Value;
 
             var manualReset = new ManualResetEvent(false);
             var dokan = new Dokan(new DokanNet.Logging.NullLogger());
 
-            var dokanOperations = app.ApplicationServices.GetRequiredService<IDokanOperations>();
+            var dokanOperations = app.GetRequiredService<IDokanOperations>();
 
             var dokanBuilder = new DokanInstanceBuilder(dokan)
                 .ConfigureLogger(() => new DokanNet.Logging.NullLogger())
