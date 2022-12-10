@@ -11,7 +11,6 @@ public static class StorageHostExtension
     public static IServiceCollection AddStorage(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<IDokanOperations, IntegrationOperations>();
-        services.AddSingleton<MemoryCaching>();
         services.AddHttpContextAccessor();
 
         var section = configuration.GetSection(nameof(Options.DokanOptions));

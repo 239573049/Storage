@@ -16,6 +16,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\..\..\..\minio-dotnet\Minio\Minio.csproj" />
+	  <ProjectReference Include="..\Minio\Minio.csproj" />
 	</ItemGroup>
 </Project>

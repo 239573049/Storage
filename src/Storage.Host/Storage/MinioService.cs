@@ -10,13 +10,13 @@ using System.Text;
 using Storage.Host.Caches;
 using System.Drawing;
 using System;
+using System.Diagnostics;
 
 namespace Storage.Host.Storage;
 
-public class MinioService : IStorageService
+public class MinioService : IStorageService, IDisposable
 {
-
-
+    private bool disposable;
     private readonly ConcurrentDictionary<string, MinioWriteCache> _writeCache = new();
 
     private readonly MinioClient _client;
@@ -42,10 +42,58 @@ public class MinioService : IStorageService
             makeBucketArgs.WithBucket(_minio.BucketName);
             _client.MakeBucketAsync(makeBucketArgs).GetAwaiter().GetResult();
         }
+
+        _ = Task.Factory.StartNew(StartWriteCache);
+    }
+
+    private async void StartWriteCache()
+    {
+        while (!disposable)
+        {
+            await Task.Delay(3000);
+            var now = DateTime.Now;
+            try
+            {
+                foreach (var t in _writeCache.Where(x => x.Value.UpdateTime.AddSeconds(5) < now))
+                {
+                    if (_writeCache.TryRemove(t.Key, out var writeCache))
+                    {
+                        // 当tag为空时数据是不适合切片的所以需要单独上传
+                        if (!writeCache.Etags.Any())
+                        {
+                            var memoryStream = new MemoryStream(writeCache.MemoryStream.ToArray());
+                            var args = new PutObjectArgs()
+                                .WithBucket(_minio.BucketName)
+                                .WithObject(writeCache.FileName)
+                                .WithStreamData(memoryStream)
+                                .WithObjectSize(writeCache.MemoryStream.Length);
+                            await _client.PutObjectAsync(args);
+                            return;
+                        }
+
+                        WriteCache(writeCache!, GetPutObject(writeCache!.FileName, writeCache.MemoryStream.Length),
+                            false);
+
+                        var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
+                            .WithBucket(_minio.BucketName)
+                            .WithObject(writeCache.FileName)
+                            .WithUploadId(writeCache.FileName)
+                            .WithETags(writeCache.Etags);
+
+                        await _client.CompleteMultipartUploadAsync(completeMultipartUploadArgs, CancellationToken.None)
+                            .ConfigureAwait(false);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+            }
+        }
     }
 
     private void Info(string? message, params object?[] args)
     {
+#if DEBUG
         if (string.IsNullOrEmpty(message))
         {
             return;
@@ -53,10 +101,12 @@ public class MinioService : IStorageService
 
         Console.ForegroundColor = ConsoleColor.Blue;
         Console.WriteLine(message, args);
+#endif
     }
 
     private void Error(string? message, params object?[] args)
     {
+#if DEBUG
         if (string.IsNullOrEmpty(message))
         {
             return;
@@ -64,6 +114,7 @@ public class MinioService : IStorageService
 
         Console.ForegroundColor = ConsoleColor.DarkRed;
         Console.WriteLine(message, args);
+#endif
     }
 
     public void GetPath(ref string fileName)
@@ -87,8 +138,6 @@ public class MinioService : IStorageService
         o.WithBucket(_minio.BucketName);
         o.WithObject(fileName);
         _client.RemoveObjectAsync(o).GetAwaiter().GetResult();
-
-        _memoryCaching.Remove(fileName);
 
         return NtStatus.Success;
     }
@@ -117,8 +166,6 @@ public class MinioService : IStorageService
 
             _client.RemoveObjectAsync(args).GetAwaiter().GetResult();
         }
-
-        _memoryCaching.Remove(fileName);
 
         return NtStatus.Success;
     }
@@ -198,8 +245,6 @@ public class MinioService : IStorageService
     {
         GetPath(ref fileName);
 
-        Info("{0}=> fileName:{1}  IsDirectory:{2}", nameof(GetFileInformation), fileName, info.IsDirectory);
-
         // 根目录单独处理
         if (string.IsNullOrEmpty(fileName))
         {
@@ -212,35 +257,46 @@ public class MinioService : IStorageService
             return DokanResult.Success;
         }
 
-        var o = new ListObjectsArgs();
-        o.WithBucket(_minio.BucketName);
-        o.WithPrefix(fileName);
-        o.WithRecursive(false);
 
-        Item? data = null;
-        try
+        var fileInformation = _memoryCaching.GetFileInformation(fileName);
+        if (fileInformation == null)
         {
-            data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
-        }
-        catch (Exception exception)
-        {
-            Error("GetFileInformation exception :{0} fileName:{1} ", exception, fileName);
-        }
+            Info("{0}=> fileName:{1}  IsDirectory:{2}", nameof(GetFileInformation), fileName, info.IsDirectory);
+            var o = new ListObjectsArgs();
+            o.WithBucket(_minio.BucketName);
+            o.WithPrefix(fileName);
+            o.WithRecursive(false);
 
-        if (data == null)
-        {
-            fileInfo = new FileInformation();
-            return DokanResult.FileNotFound;
-        }
+            Item? data = null;
+            try
+            {
+                data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
+            }
+            catch (Exception exception)
+            {
+                Error("GetFileInformation exception :{0} fileName:{1} ", exception, fileName);
+            }
 
-        fileInfo = new FileInformation
+            if (data == null)
+            {
+                fileInfo = new FileInformation();
+                return DokanResult.FileNotFound;
+            }
+
+            fileInfo = new FileInformation
+            {
+                Attributes = data.IsDir ? FileAttributes.Directory : FileAttributes.Normal,
+                LastWriteTime = data.LastModifiedDateTime,
+                FileName = data.Key.TrimEnd('/'),
+                CreationTime = data.LastModifiedDateTime,
+                Length = (long)data.Size
+            };
+            _memoryCaching.AddFileInformation(fileName, fileInfo);
+        }
+        else
         {
-            Attributes = data.IsDir ? FileAttributes.Directory : FileAttributes.Normal,
-            LastWriteTime = data.LastModifiedDateTime,
-            FileName = data.Key.TrimEnd('/'),
-            CreationTime = data.LastModifiedDateTime,
-            Length = (long)data.Size
-        };
+            fileInfo = (FileInformation)fileInformation;
+        }
 
         return DokanResult.Success;
     }
@@ -249,62 +305,185 @@ public class MinioService : IStorageService
     {
         GetPath(ref filePath);
 
-        Info("{0}=> filePath:{1}  searchPattern:{2}", nameof(FindFiles), filePath, searchPattern);
 
-        var o = new ListObjectsArgs();
-        o.WithBucket(_minio.BucketName);
+        var info = _memoryCaching.GetFileInformationList(filePath);
+        if (info == null)
+        {
+            Info("{0}=> filePath:{1}  searchPattern:{2}", nameof(FindFiles), filePath, searchPattern);
+            var o = new ListObjectsArgs();
+            o.WithBucket(_minio.BucketName);
 
-        var name = filePath + "/" + (searchPattern == "*" ? "" : searchPattern);
-        name = name.EndsWith('/') ? name : name + '/';
+            var name = filePath + "/" + (searchPattern == "*" ? "" : searchPattern);
+            name = name.EndsWith('/') ? name : name + '/';
 
-        o.WithPrefix(name);
+            o.WithPrefix(name);
 
-        files = _client.ListObjectsAsync(o)
-            .ToList()
-            .GetAwaiter()
-            .GetResult().Select(x => new FileInformation()
-            {
-                Attributes = x.IsDir ? FileAttributes.Directory : FileAttributes.Normal,
-                LastWriteTime = x.LastModifiedDateTime,
-                FileName = TrimStart(x.Key.TrimEnd('/'), name),
-                CreationTime = x.LastModifiedDateTime,
-                Length = (long)x.Size
-            }).Where(x => x.FileName?.EndsWith(".desktop") == false).ToList();
-
+            var list = _client.ListObjectsAsync(o)
+                .ToList()
+                .GetAwaiter()
+                .GetResult().Select(x => new FileInformation()
+                {
+                    Attributes = x.IsDir ? FileAttributes.Directory : FileAttributes.Normal,
+                    LastWriteTime = x.LastModifiedDateTime,
+                    FileName = TrimStart(x.Key.TrimEnd('/'), name),
+                    CreationTime = x.LastModifiedDateTime,
+                    Length = (long)x.Size
+                }).Where(x => x.FileName?.EndsWith(".desktop") == false).ToList();
+            _memoryCaching.AddFileInformationList(filePath, list);
+            files = list;
+        }
+        else
+        {
+            files = info;
+        }
 
         return NtStatus.Success;
     }
 
+
+    // 设置上传切片大小
+    const int ReadSize = 1024 * 1024 * 5;
+
     public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
     {
         GetPath(ref fileName);
+
+        var result = _readCaches.TryGetValue(fileName, out var cache);
+        if (result == false)
+        {
+            cache = new ReadCache((int)offset);
+            _readCaches.TryAdd(fileName, cache);
+        }
+        else if (offset >= cache?.Offset && cache!.Buffer.Length - cache.Offset > buffer.Length) // 当需要缓存长度大于需要的长度时进入
+        {
+
+            if (offset - cache.Offset < cache.Buffer.Length)
+            {
+                Info("{0}=> filePath:{1} 缓存 buffer:{2}  offset:{3}", nameof(ReadFile), fileName, buffer.Length, offset);
+                Array.Copy(cache.Buffer, offset - cache.Offset, buffer, 0, buffer.Length);
+                bytesRead = buffer.Length;
+                return NtStatus.Success;
+            }
+        }
 
         Info("{0}=> filePath:{1}  buffer:{2}  offset:{3}", nameof(ReadFile), fileName, buffer.Length, offset);
 
         var obj = new GetObjectArgs();
         obj.WithBucket(_minio.BucketName);
         obj.WithObject(fileName);
-        obj.WithOffsetAndLength(offset, buffer.Length);
+        // 当buffer大于切片大小直接使用buffer长度
+        obj.WithOffsetAndLength(offset, buffer.Length > ReadSize ? buffer.Length : ReadSize);
         var read = 0;
         obj.WithCallbackStream(stream =>
         {
-            var m = new MemoryStream();
+            using var m = new MemoryStream();
+            cache.Offset = (int)offset; // offset 记录第一次偏移值
             stream.CopyTo(m);
-            read = (int)m.Length;
-            Array.Copy(m.GetBuffer(), 0, buffer, 0, read);
+            cache.Buffer = m.ToArray();
         });
+
         try
         {
             _client.GetObjectAsync(obj).GetAwaiter().GetResult();
-            bytesRead = read;
+            bytesRead = buffer.Length;
+            Array.Copy(cache.Buffer, cache.Offset - offset, buffer, 0,
+                buffer.Length > cache.Buffer.Length ? cache.Buffer.Length : buffer.Length);
         }
         catch (Exception exception)
         {
-            Error("ReadFile exception :{0} fileName:{1} ", exception, fileName);
             bytesRead = 0;
         }
 
+        //if (!_readCaches.TryGetValue(fileName, out var cache))
+        //{
+        //    cache = new ReadCache(offset, buffer.Length < size ? null : buffer.Length);
+        //    _readCaches.TryAdd(fileName, cache);
+
+        //    var obj = new GetObjectArgs();
+        //    obj.WithBucket(_minio.BucketName);
+        //    obj.WithObject(fileName);
+        //    obj.WithOffsetAndLength(offset, 1024 * 1024 * 5);
+        //    var read = 0;
+        //    obj.WithCallbackStream(stream =>
+        //    {
+        //        var m = new MemoryStream();
+        //        stream.CopyTo(m);
+        //        cache.Buffer = m.ToArray();
+        //        cache.Buffer = m.GetBuffer();
+        //        read = (int)cache.Buffer.Length;
+        //    });
+
+        //    try
+        //    {
+        //        _client.GetObjectAsync(obj).GetAwaiter().GetResult();
+        //        bytesRead = 0;
+
+        //    }
+        //    catch (Exception exception)
+        //    {
+        //        Error("ReadFile exception :{0} fileName:{1} ", exception, fileName);
+        //        bytesRead = 0;
+        //    }
+
+        //    cache.Buffer.ToArray();
+        //    if (cache.Buffer.Length <= 0)
+        //    {
+        //        _readCaches.TryRemove(fileName, out _);
+        //    }
+        //}
+        //else
+        //{
+        //    var obj = new GetObjectArgs();
+        //    obj.WithBucket(_minio.BucketName);
+        //    obj.WithObject(fileName);
+        //    obj.WithOffsetAndLength(offset, 1024 * 1024 * 5);
+        //    var read = 0;
+        //    obj.WithCallbackStream(stream =>
+        //    {
+        //        var m = new MemoryStream();
+        //        stream.CopyTo(m);
+        //        cache.Buffer = m.ToArray();
+        //        read = (int)cache.Buffer.Length;
+        //    });
+
+        //    try
+        //    {
+        //        _client.GetObjectAsync(obj).GetAwaiter().GetResult();
+        //        bytesRead = 0;
+
+        //    }
+        //    catch (Exception exception)
+        //    {
+        //        Error("ReadFile exception :{0} fileName:{1} ", exception, fileName);
+        //        bytesRead = 0;
+        //    }
+        //    Array.Copy(cache.Buffer, cache.Offset, buffer, 0, buffer.Length);
+        //    cache.Offset = buffer.Length;
+        //    bytesRead = buffer.Length;
+        //    if (cache.Buffer.Length <= 0)
+        //    {
+        //        _readCaches.TryRemove(fileName, out _);
+        //    }
+        //}
+
+
         return NtStatus.Success;
+    }
+
+    private readonly ConcurrentDictionary<string, ReadCache>
+        _readCaches = new();
+
+    class ReadCache
+    {
+        public int Offset { get; set; }
+
+        public byte[] Buffer { get; set; }
+
+        public ReadCache(int offset)
+        {
+            Offset = offset;
+            Buffer = Array.Empty<byte>();
+        }
     }
 
     public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
@@ -315,31 +494,29 @@ public class MinioService : IStorageService
 
         var put = GetPutObject(fileName, buffer.Length);
 
-        // 设置上传切片大小
-        const int size = 1024 * 1024 * 5;
         if (offset == 0)
         {
-            var multipartUploadArgs = new NewMultipartUploadPutArgs()
-                .WithBucket(_minio.BucketName)
-                .WithContentType(null)
-                .WithObject(fileName);
-
-            var uploadId = _client.NewMultipartUploadAsync(multipartUploadArgs).GetAwaiter().GetResult();
-
-            if (buffer.Length < size)
+            if (buffer.Length < ReadSize)
             {
                 var memoryStream = new MemoryStream();
                 memoryStream.Write(buffer);
                 var writeCache = new MinioWriteCache
                 {
-                    UploadId = uploadId,
+                    FileName = fileName,
                     MemoryStream = memoryStream,
+                    UpdateTime = DateTime.Now,
                     Etags = new Dictionary<int, string>()
                 };
                 _writeCache.TryAdd(fileName, writeCache);
             }
             else
             {
+                var multipartUploadArgs = new NewMultipartUploadPutArgs()
+                    .WithBucket(_minio.BucketName)
+                    .WithContentType(null)
+                    .WithObject(fileName);
+
+                var uploadId = _client.NewMultipartUploadAsync(multipartUploadArgs).GetAwaiter().GetResult();
                 var putObjectArgs = new PutObjectArgs(put)
                     .WithRequestBody(buffer)
                     .WithUploadId(uploadId)
@@ -350,6 +527,8 @@ public class MinioService : IStorageService
                 var writeCache = new MinioWriteCache
                 {
                     UploadId = uploadId,
+                    FileName = fileName,
+                    UpdateTime = DateTime.Now,
                     Etags =
                     {
                         [1] = etag
@@ -363,8 +542,8 @@ public class MinioService : IStorageService
             _writeCache.TryGetValue(fileName, out var writeCache);
 
             writeCache!.MemoryStream.Write(buffer);
-
-            //WriteCache(writeCache, put, size);
+            writeCache.UpdateTime = DateTime.Now;
+            WriteCache(writeCache, put);
         }
 
         bytesWritten = buffer.Length;
@@ -372,22 +551,39 @@ public class MinioService : IStorageService
         return NtStatus.Success;
     }
 
-    private void WriteCache(MinioWriteCache writeCache, PutObjectPartArgs put, long size, bool newMemory = true)
+    private void WriteCache(MinioWriteCache writeCache, PutObjectPartArgs put, bool newMemory = true)
     {
-        if (writeCache.MemoryStream.Length >= size)
+        if (writeCache.MemoryStream.Length >= ReadSize)
         {
+            Console.WriteLine("WriteCache size:{0}", writeCache.MemoryStream.Length);
+            var s = Stopwatch.StartNew();
             writeCache!.PartNumber += 1;
+            if (string.IsNullOrEmpty(writeCache.UploadId))
+            {
+                var multipartUploadArgs = new NewMultipartUploadPutArgs()
+                    .WithBucket(_minio.BucketName)
+                    .WithContentType(null)
+                    .WithObject(writeCache.FileName);
+
+                writeCache.UploadId = _client.NewMultipartUploadAsync(multipartUploadArgs).GetAwaiter().GetResult();
+            }
+
             var putObjectArgs = new PutObjectArgs(put)
                 .WithRequestBody(writeCache.MemoryStream.ToArray())
                 .WithUploadId(writeCache.UploadId)
                 .WithObjectSize(writeCache.MemoryStream.Length)
                 .WithPartNumber(writeCache.PartNumber);
 
+            s.Stop();
+            Info("{0}=> 耗时1：{1}ms", nameof(WriteCache), s.ElapsedMilliseconds);
+            s = Stopwatch.StartNew();
             var etag = _client.PutObjectSinglePartAsync(putObjectArgs).GetAwaiter().GetResult();
             writeCache.Etags[writeCache.PartNumber] = etag;
             writeCache.UpdateTime = DateTime.Now;
 
             writeCache.MemoryStream.Close();
+            s.Stop();
+            Info("{0}=> 耗时2：{1}ms", nameof(WriteCache), s.ElapsedMilliseconds);
             if (newMemory)
             {
                 writeCache.MemoryStream = new MemoryStream();
@@ -425,8 +621,6 @@ public class MinioService : IStorageService
 
         _client.PutObjectAsync(put).GetAwaiter().GetResult();
 
-        _memoryCaching.Remove(path);
-
         return true;
     }
 
@@ -445,20 +639,33 @@ public class MinioService : IStorageService
             return true;
         }
 
-        Info("{0}=> path:{1} ", nameof(ExistFile), path);
-
-        var o = new ListObjectsArgs();
-        o.WithBucket(_minio.BucketName);
-        o.WithPrefix(path);
-        try
-        {
-            var data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
-            _memoryCaching.Add(path + "ExistFile", data);
-            return data?.IsDir == false;
-        }
-        catch
+        if (path.EndsWith("HEAD"))
         {
             return false;
+        }
+
+
+        var item = _memoryCaching.GetExistFile(path);
+        if (item == null)
+        {
+            Info("{0}=> path:{1} ", nameof(ExistFile), path);
+            var o = new ListObjectsArgs();
+            o.WithBucket(_minio.BucketName);
+            o.WithPrefix(path);
+            try
+            {
+                var data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
+                _memoryCaching.AddExistFile(path, data);
+                return data?.IsDir == false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        else
+        {
+            return item.IsDir == false;
         }
     }
 
@@ -466,12 +673,12 @@ public class MinioService : IStorageService
     {
         GetPath(ref path);
 
-        Info("{0}=> path:{1} ", nameof(CreateDirectory), path);
 
         var stream = new MemoryStream(Encoding.UTF8.GetBytes("desktop"));
 
         try
         {
+            Info("{0}=> path:{1} ", nameof(CreateDirectory), path);
             var put = new PutObjectArgs();
             put.WithObjectSize(stream.Length);
             put.WithStreamData(stream);
@@ -479,7 +686,6 @@ public class MinioService : IStorageService
             put.WithObject(path + "/.desktop");
             put.WithContentType("application/octet-stream");
             _client.PutObjectAsync(put).GetAwaiter().GetResult();
-            _memoryCaching.Remove(path);
         }
         catch (Exception exception)
         {
@@ -518,11 +724,9 @@ public class MinioService : IStorageService
     {
         GetPath(ref fileName);
 
-        if (_writeCache.TryGetValue(fileName, out var cache))
+        if (_writeCache.Remove(fileName, out var cache))
         {
-            _writeCache.TryGetValue(fileName, out var writeCache);
-
-            WriteCache(writeCache!, GetPutObject(fileName, cache.MemoryStream.Length),0, false);
+            WriteCache(cache!, GetPutObject(fileName, cache.MemoryStream.Length), false);
 
             var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
                 .WithBucket(_minio.BucketName)
@@ -532,8 +736,6 @@ public class MinioService : IStorageService
 
             await _client.CompleteMultipartUploadAsync(completeMultipartUploadArgs, CancellationToken.None)
                 .ConfigureAwait(false);
-
-            _writeCache.Remove(fileName, out _);
         }
     }
 
@@ -548,19 +750,33 @@ public class MinioService : IStorageService
             return true;
         }
 
-        Info("{0}=> path:{1} ", nameof(ExistDirectory), path);
-
-        var o = new ListObjectsArgs();
-        o.WithBucket(_minio.BucketName);
-        o.WithPrefix(path);
-        try
-        {
-            var data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
-            return data?.IsDir == true;
-        }
-        catch (Exception exception)
+        if (path.EndsWith("HEAD"))
         {
             return false;
+        }
+
+        var item = _memoryCaching.GetExistFile(path);
+        if (item == null)
+        {
+            Info("{0}=> path:{1} ", nameof(ExistDirectory), path);
+
+            var o = new ListObjectsArgs();
+            o.WithBucket(_minio.BucketName);
+            o.WithPrefix(path);
+            try
+            {
+                var data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
+                _memoryCaching.AddExistFile(path, data);
+                return data?.IsDir == true;
+            }
+            catch (Exception exception)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            return item.IsDir == true;
         }
     }
 
@@ -579,5 +795,11 @@ public class MinioService : IStorageService
         }
 
         return value;
+    }
+
+    public void Dispose()
+    {
+        disposable = true;
+        _memoryCaching.Dispose();
     }
 }
