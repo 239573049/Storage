@@ -56,30 +56,7 @@ public class MinioService : IStorageService, IDisposable
                 {
                     if (_writeCache.TryRemove(t.Key, out var writeCache))
                     {
-                        // 当tag为空时数据是不适合切片的所以需要单独上传
-                        if (!writeCache.Etags.Any())
-                        {
-                            var memoryStream = new MemoryStream(writeCache.MemoryStream.ToArray());
-                            var args = new PutObjectArgs()
-                                .WithBucket(_minio.BucketName)
-                                .WithObject(writeCache.FileName)
-                                .WithStreamData(memoryStream)
-                                .WithObjectSize(writeCache.MemoryStream.Length);
-                            await _client.PutObjectAsync(args);
-                            return;
-                        }
-
-                        WriteCache(writeCache!, GetPutObject(writeCache!.FileName, writeCache.MemoryStream.Length),
-                            false);
-
-                        var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
-                            .WithBucket(_minio.BucketName)
-                            .WithObject(writeCache.FileName)
-                            .WithUploadId(writeCache.FileName)
-                            .WithETags(writeCache.Etags);
-
-                        await _client.CompleteMultipartUploadAsync(completeMultipartUploadArgs, CancellationToken.None)
-                            .ConfigureAwait(false);
+                        await Upload(writeCache);
                     }
                 }
             }
@@ -87,6 +64,34 @@ public class MinioService : IStorageService, IDisposable
             {
             }
         }
+    }
+
+    private async Task Upload(MinioWriteCache writeCache)
+    {
+        // TODO:当tag为空时数据是不适合切片的所以需要单独上传
+        if (!writeCache.Etags.Any())
+        {
+            var memoryStream = new MemoryStream(writeCache.MemoryStream.ToArray());
+            var args = new PutObjectArgs()
+                .WithBucket(_minio.BucketName)
+                .WithObject(writeCache.FileName)
+                .WithStreamData(memoryStream)
+                .WithObjectSize(writeCache.MemoryStream.Length);
+            await _client.PutObjectAsync(args);
+            return;
+        }
+
+        WriteCache(writeCache!, GetPutObject(writeCache!.FileName, writeCache.MemoryStream.Length),
+            false);
+
+        var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
+            .WithBucket(_minio.BucketName)
+            .WithObject(writeCache.FileName)
+            .WithUploadId(writeCache.FileName)
+            .WithETags(writeCache.Etags);
+
+        await _client.CompleteMultipartUploadAsync(completeMultipartUploadArgs, CancellationToken.None)
+            .ConfigureAwait(false);
     }
 
     private void Info(string? message, params object?[] args)
@@ -119,6 +124,7 @@ public class MinioService : IStorageService, IDisposable
     {
         if (fileName != "/")
         {
+            // TODO： 由于Mino和win的路径符号不一样需要置换
             fileName = fileName.Replace('\\', '/').TrimStart('/');
         }
     }
@@ -231,7 +237,7 @@ public class MinioService : IStorageService, IDisposable
             _client.CopyObjectAsync(args).GetAwaiter().GetResult();
             _client.RemoveObjectAsync(removeObjectArgs).GetAwaiter().GetResult();
         }
-        catch(Exception exception)
+        catch (Exception exception)
         {
             Error("MoveDirectory exception :{0}", exception);
             return false;
@@ -337,7 +343,7 @@ public class MinioService : IStorageService, IDisposable
         else if (offset >= cache?.Offset && cache!.Buffer.Length - cache.Offset > buffer.Length) // 当需要缓存长度大于需要的长度时进入
         {
 
-            if (offset - cache.Offset < cache.Buffer.Length)
+            if ((offset - cache.Offset + buffer.Length) < cache.Buffer.Length)
             {
                 Info("{0}=> filePath:{1} 缓存 buffer:{2}  offset:{3}", nameof(ReadFile), fileName, buffer.Length, offset);
                 Array.Copy(cache.Buffer, offset - cache.Offset, buffer, 0, buffer.Length);
@@ -448,10 +454,12 @@ public class MinioService : IStorageService, IDisposable
         else
         {
             _writeCache.TryGetValue(fileName, out var writeCache);
-
-            writeCache!.MemoryStream.Write(buffer);
-            writeCache.UpdateTime = DateTime.Now;
-            WriteCache(writeCache, put);
+            if (writeCache != null)
+            {
+                writeCache!.MemoryStream.Write(buffer);
+                writeCache.UpdateTime = DateTime.Now;
+                WriteCache(writeCache, put);
+            }
         }
 
         bytesWritten = buffer.Length;
@@ -546,7 +554,7 @@ public class MinioService : IStorageService, IDisposable
         {
             return true;
         }
-        
+
         if (path.EndsWith("HEAD"))
         {
             return false;
@@ -625,27 +633,22 @@ public class MinioService : IStorageService, IDisposable
         DateTime? lastWriteTime,
         IDokanFileInfo info)
     {
-        // TODO: 由于已经增加固定时间无响应自动发送合并所以先注释
-        //GetPath(ref fileName);
-        //if (_writeCache.Remove(fileName, out var cache))
-        //{
-        //    WriteCache(cache!, GetPutObject(fileName, cache.MemoryStream.Length), false);
 
-        //    var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
-        //        .WithBucket(_minio.BucketName)
-        //        .WithObject(fileName)
-        //        .WithUploadId(cache.UploadId)
-        //        .WithETags(cache.Etags);
-
-        //    await _client.CompleteMultipartUploadAsync(completeMultipartUploadArgs, CancellationToken.None)
-        //        .ConfigureAwait(false);
-        //}
+        GetPath(ref fileName);
+        if (_writeCache.Remove(fileName, out var cache))
+        {
+            WriteCache(cache, GetPutObject(cache.FileName, cache.MemoryStream.Length), false);
+            _ = Task.Run(async () =>
+            {
+                await Upload(cache);
+            });
+        }
     }
 
     public bool ExistDirectory(string path)
     {
         GetPath(ref path);
-        
+
         // 当path为空是说明查询的是根目录 根目录一定存在
         if (string.IsNullOrEmpty(path))
         {
@@ -673,7 +676,7 @@ public class MinioService : IStorageService, IDisposable
         }
         catch (Exception exception)
         {
-            Error("ExistDirectory exception :{0} path:{1}", exception,path);
+            Error("ExistDirectory exception :{0} path:{1}", exception, path);
             return false;
         }
     }
