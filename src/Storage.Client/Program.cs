@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Configuration;
 using Storage.Client.Helpers;
+using Storage.Client.Options;
 using System.Runtime.InteropServices;
 
 namespace Storage.Client;
@@ -23,8 +25,10 @@ internal static class Program
         {
             builder.Host.UseWindowsService();
         }
-        var services = builder.Services;
 
+        
+        var services = builder.Services;
+        services.AddSingleton(builder.Configuration.GetValue<OssOptions>(nameof(OssOptions)));
         services.AddStorage();
         services.AddMinio();
 
