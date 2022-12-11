@@ -20,7 +20,7 @@ public class Constant
     /// <summary>
     /// Win服务名称
     /// </summary>
-    public const string ServerName = "Storage-Server";
+    public const string ServerName = "StorageServer";
 
     /// <summary>
     /// 注册Window服务

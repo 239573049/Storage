@@ -34,7 +34,7 @@ partial class StorageMain
             this.NotifyMenus = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.退出管理ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.minioToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.启动关闭Minio映射ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.MinioMapToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.tabControl1 = new System.Windows.Forms.TabControl();
             this.tabPage1 = new System.Windows.Forms.TabPage();
             this.MinioGroup = new System.Windows.Forms.GroupBox();
@@ -76,32 +76,32 @@ partial class StorageMain
             // NotifyMenus
             // 
             this.NotifyMenus.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.退出管理ToolStripMenuItem,
-            this.minioToolStripMenuItem});
+            this.minioToolStripMenuItem,
+            this.退出管理ToolStripMenuItem});
             this.NotifyMenus.Name = "NotifyMenus";
-            this.NotifyMenus.Size = new System.Drawing.Size(125, 48);
+            this.NotifyMenus.Size = new System.Drawing.Size(181, 70);
             // 
             // 退出管理ToolStripMenuItem
             // 
             this.退出管理ToolStripMenuItem.Name = "退出管理ToolStripMenuItem";
-            this.退出管理ToolStripMenuItem.Size = new System.Drawing.Size(124, 22);
-            this.退出管理ToolStripMenuItem.Text = "退出管理";
+            this.退出管理ToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.退出管理ToolStripMenuItem.Text = "退出服务";
             this.退出管理ToolStripMenuItem.Click += new System.EventHandler(this.ExitToolStripMenuItem_Click);
             // 
             // minioToolStripMenuItem
             // 
             this.minioToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.启动关闭Minio映射ToolStripMenuItem});
+            this.MinioMapToolStripMenuItem});
             this.minioToolStripMenuItem.Name = "minioToolStripMenuItem";
-            this.minioToolStripMenuItem.Size = new System.Drawing.Size(124, 22);
+            this.minioToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.minioToolStripMenuItem.Text = "Minio";
             // 
             // 启动关闭Minio映射ToolStripMenuItem
             // 
-            this.启动关闭Minio映射ToolStripMenuItem.Name = "启动关闭Minio映射ToolStripMenuItem";
-            this.启动关闭Minio映射ToolStripMenuItem.Size = new System.Drawing.Size(186, 22);
-            this.启动关闭Minio映射ToolStripMenuItem.Text = "启动/关闭Minio映射";
-            this.启动关闭Minio映射ToolStripMenuItem.Click += new System.EventHandler(this.MinioMapToolStripMenuItem_Click);
+            this.MinioMapToolStripMenuItem.Name = "启动关闭Minio映射ToolStripMenuItem";
+            this.MinioMapToolStripMenuItem.Size = new System.Drawing.Size(186, 22);
+            this.MinioMapToolStripMenuItem.Text = "启动/关闭Minio映射";
+            this.MinioMapToolStripMenuItem.Click += new System.EventHandler(this.MinioMapToolStripMenuItem_Click);
             // 
             // tabControl1
             // 
@@ -392,7 +392,7 @@ partial class StorageMain
     private ContextMenuStrip NotifyMenus;
     private ToolStripMenuItem 退出管理ToolStripMenuItem;
     private ToolStripMenuItem minioToolStripMenuItem;
-    private ToolStripMenuItem 启动关闭Minio映射ToolStripMenuItem;
+    private ToolStripMenuItem MinioMapToolStripMenuItem;
     private TabControl tabControl1;
     private TabPage tabPage1;
     private TabPage tabPage2;
