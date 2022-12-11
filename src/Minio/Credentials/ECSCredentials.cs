@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-using System.Text.Json.Serialization;
 using Minio.DataModel;
+using System.Text.Json.Serialization;
 
 
 namespace Minio.Credentials;

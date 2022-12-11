@@ -15,11 +15,11 @@
  * limitations under the License.
  */
 
+using Minio.Credentials;
+using Minio.Exceptions;
 using System;
 using System.Net;
 using System.Net.Http;
-using Minio.Credentials;
-using Minio.Exceptions;
 
 namespace Minio;
 

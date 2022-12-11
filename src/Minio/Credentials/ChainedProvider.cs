@@ -15,11 +15,11 @@
  * limitations under the License.
  */
 
+using Minio.DataModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Minio.DataModel;
 
 namespace Minio.Credentials;
 

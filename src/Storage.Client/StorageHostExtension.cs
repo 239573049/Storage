@@ -1,9 +1,5 @@
 ﻿using DokanNet;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Storage.Client.Helpers;
-using Storage.Client.Options;
 using Storage.Host;
 using Storage.Host.Storage;
 using DokanOptions = DokanNet.DokanOptions;
@@ -17,38 +13,32 @@ public static class StorageHostExtension
 
     public static bool StartMinio => startMinio;
 
-    public static IServiceCollection AddStorage(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddStorage(this IServiceCollection services)
     {
         services.AddSingleton<IDokanOperations, IntegrationOperations>();
-
-        var section = configuration.GetSection(nameof(DokanOptions));
-        services.Configure<Client.Options.DokanOptions>(section);
 
         return services;
     }
 
-    public static IServiceCollection AddMinio(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddMinio(this IServiceCollection services)
     {
-        var section = configuration.GetSection(nameof(MinioOptions));
-        services.Configure<MinioOptions>(section);
-
         services.AddSingleton<IStorageService, MinioService>();
 
         return services;
     }
 
-    public static void UseDokan(this IServiceProvider app, Client.Options.DokanOptions? dokanOptions = null)
+    public static void UseDokan(this IServiceProvider app, Options.DokanOptions? dokanOptions = null, Action<bool>? succeed = null)
     {
         _ = Task.Factory.StartNew(() =>
         {
             if (startMinio)
             {
+                succeed?.Invoke(startMinio);
                 return;
             }
 
             try
             {
-
                 startMinio = true;
                 dokanOptions ??= ConfigHelper.GetDokanOptions();
 
@@ -66,11 +56,15 @@ public static class StorageHostExtension
                     });
 
                 _dokanInstance = dokanBuilder.Build(dokanOperations);
+
+                succeed?.Invoke(startMinio);
                 manualReset.WaitOne();
             }
             catch (Exception e)
             {
                 startMinio = false;
+                succeed?.Invoke(startMinio);
+                MessageBox.Show("启动挂载硬盘驱动时错误：{0}", e.Message);
             }
         });
 

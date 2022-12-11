@@ -15,16 +15,16 @@
  * limitations under the License.
  */
 
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Minio.DataModel;
 using Minio.DataModel.ILM;
 using Minio.DataModel.ObjectLock;
 using Minio.DataModel.Replication;
 using Minio.DataModel.Tags;
 using Minio.Exceptions;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Minio;
 

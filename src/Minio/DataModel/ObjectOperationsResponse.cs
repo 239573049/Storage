@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+using Minio.DataModel;
+using Minio.DataModel.ObjectLock;
+using Minio.DataModel.Tags;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -22,9 +25,6 @@ using System.Net;
 using System.Text;
 using System.Xml.Linq;
 using System.Xml.Serialization;
-using Minio.DataModel;
-using Minio.DataModel.ObjectLock;
-using Minio.DataModel.Tags;
 
 namespace Minio;
 
@@ -83,12 +83,12 @@ internal class GetMultipartUploadsListResponse : GenericResponse
         var itemCheck = root.Root.Descendants("{http://s3.amazonaws.com/doc/2006-03-01/}Upload").FirstOrDefault();
         if (uploadsResult == null || itemCheck == null || !itemCheck.HasElements) return;
         var uploads = from c in root.Root.Descendants("{http://s3.amazonaws.com/doc/2006-03-01/}Upload")
-            select new Upload
-            {
-                Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Key").Value,
-                UploadId = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}UploadId").Value,
-                Initiated = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Initiated").Value
-            };
+                      select new Upload
+                      {
+                          Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Key").Value,
+                          UploadId = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}UploadId").Value,
+                          Initiated = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Initiated").Value
+                      };
         UploadResult = new Tuple<ListMultipartUploadsResult, List<Upload>>(uploadsResult, uploads.ToList());
     }
 

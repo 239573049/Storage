@@ -417,7 +417,7 @@ internal class V4Authenticator
 
     public static Dictionary<string, TValue> ToDictionary<TValue>(object obj)
     {
-        var json =JsonSerializer.Serialize(obj);
+        var json = JsonSerializer.Serialize(obj);
         var dictionary = JsonSerializer.Deserialize<Dictionary<string, TValue>>(json);
         return dictionary;
     }

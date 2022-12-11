@@ -15,15 +15,15 @@
  * limitations under the License.
  */
 
+using Minio.DataModel;
+using Minio.DataModel.ObjectLock;
+using Minio.DataModel.Tags;
+using Minio.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Minio.DataModel;
-using Minio.DataModel.ObjectLock;
-using Minio.DataModel.Tags;
-using Minio.Exceptions;
 
 namespace Minio;
 

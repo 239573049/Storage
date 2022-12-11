@@ -1,16 +1,14 @@
-﻿using System.Collections.Concurrent;
-using DokanNet;
+﻿using DokanNet;
 using Minio;
 using Minio.DataModel;
+using Storage.Client.Helpers;
+using Storage.Client.Options;
+using Storage.Host.Caches;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Reactive.Linq;
 using System.Security.AccessControl;
 using System.Text;
-using Storage.Host.Caches;
-using System.Drawing;
-using System;
-using System.Diagnostics;
-using Storage.Client.Options;
-using Storage.Client.Helpers;
 
 namespace Storage.Host.Storage;
 
@@ -359,7 +357,6 @@ public class MinioService : IStorageService, IDisposable
         obj.WithObject(fileName);
         // 当buffer大于切片大小直接使用buffer长度
         obj.WithOffsetAndLength(offset, buffer.Length > ReadSize ? buffer.Length : ReadSize);
-        var read = 0;
         obj.WithCallbackStream(stream =>
         {
             using var m = new MemoryStream();
@@ -633,7 +630,7 @@ public class MinioService : IStorageService, IDisposable
                    FileSystemFeatures.UnicodeOnDisk;
     }
 
-    public async void SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime,
+    public void SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime,
         DateTime? lastWriteTime,
         IDokanFileInfo info)
     {

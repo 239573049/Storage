@@ -15,6 +15,13 @@
  * limitations under the License.
  */
 
+using Minio.DataModel;
+using Minio.DataModel.ILM;
+using Minio.DataModel.ObjectLock;
+using Minio.DataModel.Replication;
+using Minio.DataModel.Tags;
+using Minio.Exceptions;
+using Minio.Helper;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,13 +31,6 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
-using Minio.DataModel;
-using Minio.DataModel.ILM;
-using Minio.DataModel.ObjectLock;
-using Minio.DataModel.Replication;
-using Minio.DataModel.Tags;
-using Minio.Exceptions;
-using Minio.Helper;
 
 namespace Minio;
 

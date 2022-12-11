@@ -9,7 +9,7 @@ public class MinioWriteCache
     public MemoryStream MemoryStream { get; set; } = new();
 
     public string FileName { get; set; }
-    
+
 
     public Dictionary<int, string> Etags = new();
 

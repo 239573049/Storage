@@ -1,6 +1,5 @@
 ﻿using DokanNet;
 using System.Security.AccessControl;
-using DokanOptions = Storage.Client.Options.DokanOptions;
 using FileAccess = DokanNet.FileAccess;
 
 namespace Storage.Host;

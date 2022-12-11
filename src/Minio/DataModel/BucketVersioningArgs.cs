@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-using System.Net.Http;
-using System.Text;
 using Minio.DataModel;
 using Minio.Exceptions;
+using System.Net.Http;
+using System.Text;
 
 namespace Minio;
 

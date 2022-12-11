@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+using Minio.DataModel;
+using Minio.DataModel.ILM;
+using Minio.DataModel.ObjectLock;
+using Minio.DataModel.Replication;
+using Minio.DataModel.Tags;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -25,11 +30,6 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Xml.Linq;
 using System.Xml.Serialization;
-using Minio.DataModel;
-using Minio.DataModel.ILM;
-using Minio.DataModel.ObjectLock;
-using Minio.DataModel.Replication;
-using Minio.DataModel.Tags;
 
 namespace Minio;
 
@@ -181,21 +181,21 @@ internal class GetObjectsListResponse : GenericResponse
 
         var root = XDocument.Parse(responseContent);
         var items = from c in root.Root.Descendants("{http://s3.amazonaws.com/doc/2006-03-01/}Contents")
-            select new Item
-            {
-                Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Key").Value,
-                LastModified = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}LastModified").Value,
-                ETag = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}ETag").Value,
-                Size = ulong.Parse(c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Size").Value,
-                    CultureInfo.CurrentCulture),
-                IsDir = false
-            };
+                    select new Item
+                    {
+                        Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Key").Value,
+                        LastModified = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}LastModified").Value,
+                        ETag = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}ETag").Value,
+                        Size = ulong.Parse(c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Size").Value,
+                            CultureInfo.CurrentCulture),
+                        IsDir = false
+                    };
         var prefixes = from c in root.Root.Descendants("{http://s3.amazonaws.com/doc/2006-03-01/}CommonPrefixes")
-            select new Item
-            {
-                Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Prefix").Value,
-                IsDir = true
-            };
+                       select new Item
+                       {
+                           Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Prefix").Value,
+                           IsDir = true
+                       };
         items = items.Concat(prefixes);
         ObjectsTuple = Tuple.Create(BucketResult, items.ToList());
     }
@@ -219,22 +219,22 @@ internal class GetObjectsVersionsListResponse : GenericResponse
 
         var root = XDocument.Parse(responseContent);
         var items = from c in root.Root.Descendants("{http://s3.amazonaws.com/doc/2006-03-01/}Version")
-            select new Item
-            {
-                Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Key").Value,
-                LastModified = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}LastModified").Value,
-                ETag = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}ETag").Value,
-                VersionId = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}VersionId").Value,
-                Size = ulong.Parse(c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Size").Value,
-                    CultureInfo.CurrentCulture),
-                IsDir = false
-            };
+                    select new Item
+                    {
+                        Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Key").Value,
+                        LastModified = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}LastModified").Value,
+                        ETag = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}ETag").Value,
+                        VersionId = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}VersionId").Value,
+                        Size = ulong.Parse(c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Size").Value,
+                            CultureInfo.CurrentCulture),
+                        IsDir = false
+                    };
         var prefixes = from c in root.Root.Descendants("{http://s3.amazonaws.com/doc/2006-03-01/}CommonPrefixes")
-            select new Item
-            {
-                Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Prefix").Value,
-                IsDir = true
-            };
+                       select new Item
+                       {
+                           Key = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Prefix").Value,
+                           IsDir = true
+                       };
         items = items.Concat(prefixes);
         ObjectsTuple = Tuple.Create(BucketResult, items.ToList());
     }

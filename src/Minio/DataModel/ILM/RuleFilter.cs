@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+using Minio.DataModel.Tags;
 using System;
 using System.Xml.Serialization;
-using Minio.DataModel.Tags;
 
 /*
  * RuleFilter class used within LifecycleRule which encapsulates filter information.

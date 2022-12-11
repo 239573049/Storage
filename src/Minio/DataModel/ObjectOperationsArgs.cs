@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+using Minio.DataModel;
+using Minio.DataModel.ObjectLock;
+using Minio.DataModel.Tags;
+using Minio.Exceptions;
+using Minio.Helper;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -24,11 +29,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
-using Minio.DataModel;
-using Minio.DataModel.ObjectLock;
-using Minio.DataModel.Tags;
-using Minio.Exceptions;
-using Minio.Helper;
 
 namespace Minio;
 
@@ -650,8 +650,8 @@ public class RemoveObjectsArgs : ObjectArgs<RemoveObjectsArgs>
     public RemoveObjectsArgs WithObjectsVersions(List<Tuple<string, List<string>>> objectsVersionsList)
     {
         foreach (var objVersions in objectsVersionsList)
-        foreach (var vid in objVersions.Item2)
-            ObjectNamesVersions.Add(new Tuple<string, string>(objVersions.Item1, vid));
+            foreach (var vid in objVersions.Item2)
+                ObjectNamesVersions.Add(new Tuple<string, string>(objVersions.Item1, vid));
         return this;
     }
 

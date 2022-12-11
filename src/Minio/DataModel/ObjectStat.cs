@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+using Minio.DataModel.ObjectLock;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using Minio.DataModel.ObjectLock;
 
 namespace Minio.DataModel;
 

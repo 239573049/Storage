@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+using Minio.DataModel;
+using Minio.DataModel.ObjectLock;
+using Minio.DataModel.Tags;
+using Minio.Exceptions;
+using Minio.Helper;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -27,11 +32,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Xml.Serialization;
-using Minio.DataModel;
-using Minio.DataModel.ObjectLock;
-using Minio.DataModel.Tags;
-using Minio.Exceptions;
-using Minio.Helper;
 
 namespace Minio;
 
@@ -1205,7 +1205,7 @@ public partial class MinioClient : IObjectOperations
             var etag = await PutObjectSinglePartAsync(putObjectArgs, cancellationToken).ConfigureAwait(false);
             numPartsUploaded += 1;
             totalParts[partNumber - 1] = new Part
-                { PartNumber = partNumber, ETag = etag, Size = (long)expectedReadSize };
+            { PartNumber = partNumber, ETag = etag, Size = (long)expectedReadSize };
             etags[partNumber] = etag;
         }
 
@@ -1295,7 +1295,7 @@ public partial class MinioClient : IObjectOperations
                 (CopyPartResult)await CopyObjectRequestAsync(cpPartArgs, cancellationToken).ConfigureAwait(false);
 
             totalParts[partNumber - 1] = new Part
-                { PartNumber = partNumber, ETag = cpPartResult.ETag, Size = (long)expectedReadSize };
+            { PartNumber = partNumber, ETag = cpPartResult.ETag, Size = (long)expectedReadSize };
         }
 
         var etags = new Dictionary<int, string>();
@@ -1492,14 +1492,14 @@ public partial class MinioClient : IObjectOperations
         var root = XDocument.Parse(response.Content);
 
         var uploads = from c in root.Root.Descendants("{http://s3.amazonaws.com/doc/2006-03-01/}Part")
-            select new Part
-            {
-                PartNumber = int.Parse(c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}PartNumber").Value,
-                    CultureInfo.CurrentCulture),
-                ETag = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}ETag").Value.Replace("\"", string.Empty),
-                Size = long.Parse(c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Size").Value,
-                    CultureInfo.CurrentCulture)
-            };
+                      select new Part
+                      {
+                          PartNumber = int.Parse(c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}PartNumber").Value,
+                              CultureInfo.CurrentCulture),
+                          ETag = c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}ETag").Value.Replace("\"", string.Empty),
+                          Size = long.Parse(c.Element("{http://s3.amazonaws.com/doc/2006-03-01/}Size").Value,
+                              CultureInfo.CurrentCulture)
+                      };
 
         return Tuple.Create(listPartsResult, uploads.ToList());
     }

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+using Minio.Exceptions;
+using Minio.Helper;
 using System;
 using System.Text.RegularExpressions;
 using System.Web;
-using Minio.Exceptions;
-using Minio.Helper;
 
 namespace Minio;
 

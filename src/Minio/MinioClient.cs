@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+using Minio.Credentials;
+using Minio.DataModel;
+using Minio.DataModel.Tracing;
+using Minio.Exceptions;
+using Minio.Helper;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,11 +32,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
-using Minio.Credentials;
-using Minio.DataModel;
-using Minio.DataModel.Tracing;
-using Minio.Exceptions;
-using Minio.Helper;
 
 namespace Minio;
 
@@ -309,10 +309,10 @@ public partial class MinioClient
 
         if (Provider != null)
         {
-            var isAWSEnvProvider = 
+            var isAWSEnvProvider =
                                    (Provider is ChainedProvider ch);
 
-            var isIAMAWSProvider =(Provider is ChainedProvider chained );
+            var isIAMAWSProvider = (Provider is ChainedProvider chained);
 
             AccessCredentials creds = null;
 

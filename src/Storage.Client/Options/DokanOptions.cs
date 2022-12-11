@@ -17,6 +17,6 @@ public class DokanOptions
     /// <summary>
     /// 服务状态 是否启动
     /// </summary>
-    [JsonIgnore] 
+    [JsonIgnore]
     public bool ServiceState { get; set; }
 }

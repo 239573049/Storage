@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+using Minio.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Xml.Serialization;
-using Minio.Exceptions;
 
 namespace Minio.DataModel;
 

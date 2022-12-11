@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
+using Force.Crc32;
+using Minio.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml.Serialization;
-using Force.Crc32;
-using Minio.Exceptions;
 
 namespace Minio.DataModel;
 

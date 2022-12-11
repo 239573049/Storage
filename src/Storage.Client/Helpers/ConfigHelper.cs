@@ -1,5 +1,5 @@
-﻿using System.Text.Json;
-using Storage.Client.Options;
+﻿using Storage.Client.Options;
+using System.Text.Json;
 
 namespace Storage.Client.Helpers;
 

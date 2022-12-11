@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
+using Minio.DataModel;
+using Minio.Exceptions;
+using Minio.Helper;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Minio.DataModel;
-using Minio.Exceptions;
-using Minio.Helper;
 
 namespace Minio;
 
