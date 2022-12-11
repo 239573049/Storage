@@ -1,23 +1,32 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net7.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="DokanNet" Version="2.0.5.1" />
-    <PackageReference Include="Masa.Blazor" Version="0.6.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.WindowsForms" Version="7.0.49" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="7.0.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Minio\Minio.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Modules\" />
-    <Folder Include="Helpers\" />
-  </ItemGroup>
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net7.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<UseWindowsForms>true</UseWindowsForms>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<TrimmerRemoveSymbols>true</TrimmerRemoveSymbols>
+		<PublishReadyToRunEmitSymbols>false</PublishReadyToRunEmitSymbols>
+		<DebuggerSupport>false</DebuggerSupport>
+		<EnableUnsafeUTF7Encoding>true</EnableUnsafeUTF7Encoding>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+		<MetadataUpdaterSupport>true</MetadataUpdaterSupport>
+		<UseSystemResourceKeys>true</UseSystemResourceKeys>
+		<IlcDisableReflection >true</IlcDisableReflection>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="DokanNet" Version="2.0.5.1" />
+		<PackageReference Include="Masa.Blazor" Version="0.6.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebView.WindowsForms" Version="7.0.49" />
+		<PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="7.0.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Minio\Minio.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<Folder Include="Modules\" />
+		<Folder Include="Helpers\" />
+</ItemGroup>
 
 </Project>
