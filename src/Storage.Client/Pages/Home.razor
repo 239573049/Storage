@@ -1,3 +1,142 @@
 ﻿@page "/"
-<h3>Home</h3>
+@using Storage.Host
+
+
+<div class="home">
+    <MSelect @bind-Value="@_selectValue"
+             Label="Standard"
+             Items="@_selectItems"
+             ItemText="u => u.Label"
+             ItemValue="u => u.Value">
+    </MSelect>
+
+    <MTextField Label="挂载点" @bind-Value="_dokanOptions.MountPoint"></MTextField>
+    @if (_selectValue == 1)
+    {
+        <MSwitch @bind-Value="_dokanOptions.StartDefault" Label="@(_dokanOptions.StartDefault?"开启自启动":"关闭自启动")"></MSwitch>
+        <MContainer>
+            <MRow>
+                <MCol Cols="12"
+                      Sm="6"
+                      Md="4">
+                    <MTextField @bind-Value="_minioOptions.AccessKey"
+                                Placeholder="Minio AccessKey"
+                                Filled
+                                Rounded
+                                Dense
+                                Label="AccessKey"></MTextField>
+                </MCol>
+
+                <MCol Cols="12"
+                      Sm="6"
+                      Md="4">
+                    <MTextField @bind-Value="_minioOptions.SecretKey" Label="SecretKey"
+                                Placeholder="Minio SecreKey"
+                                Filled
+                                Rounded
+                                Dense></MTextField>
+                </MCol>
+
+                <MCol Cols="12"
+                      Sm="6"
+                      Md="4">
+                    <MTextField @bind-Value="_minioOptions.BucketName" Label="BucketName"
+                                Placeholder="Minio仓储桶"
+                                Filled
+                                Rounded
+                                Dense></MTextField>
+                </MCol>
+
+                <MCol Cols="12"
+                      Sm="6"
+                      Md="4">
+                    <MTextField @bind-Value="_minioOptions.Endpoint" Label="Endpoint"
+                                Placeholder="Minio服务地址"
+                                Filled
+                                Rounded
+                                Dense></MTextField>
+                </MCol>
+
+                <MCol Cols="12"
+                      Sm="6"
+                      Md="4">
+                    <MTextField @bind-Value="_minioOptions.Port" Label="Port"
+                                Placeholder="Minio服务端口"
+                                Filled
+                                Rounded
+                                Dense></MTextField>
+                </MCol>
+
+                <MCol Cols="12"
+                      Sm="6"
+                      Md="4">
+                    <MTextField @bind-Value="_minioOptions.VolumeLabel" Label="VolumeLabel"
+                                Placeholder="设置挂载名称"
+                                Filled
+                                Rounded
+                                Dense></MTextField>
+                </MCol>
+            </MRow>
+        </MContainer>
+        <MButton Color="primary" Style="width:100%" OnClick="SaveMinio" Dark>
+            保存配置
+        </MButton>
+
+        <MButton Color="primary" Style="margin-top:10px;width:100%" Dark OnClick="StartMinio">
+            @(_dokanOptions.ServiceState ? "关闭服务" : "启动服务")
+        </MButton>
+    }
+</div>
+
+@code
+{
+    [Inject]
+    public required IServiceProvider ServiceProvider { get; set; }
+
+    private int _selectValue = 1;
+
+    private DokanOptions _dokanOptions = new();
+
+    private MinioOptions _minioOptions = new();
+
+
+    List<MappingSettingsModule> _selectItems = new()
+    {
+        new MappingSettingsModule("Minio", 1),
+        new MappingSettingsModule("Oss", 2),
+    };
+
+    private void SaveMinio()
+    {
+        ConfigHelper.SaveDokanOptions(_dokanOptions);
+        ConfigHelper.SaveMinioOptions(_minioOptions);
+    }
+
+    private void StartMinio()
+    {
+        if (!_dokanOptions.ServiceState)
+        {
+            ServiceProvider.UseDokan(_dokanOptions);
+            _dokanOptions.ServiceState = true;
+        }
+        else
+        {
+            StorageHostExtension.Stop();
+            _dokanOptions.ServiceState = false;
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        _dokanOptions = ConfigHelper.GetDokanOptions();
+        _minioOptions = ConfigHelper.GetMinioOptions();
+        base.OnInitialized();
+    }
+}
+
+<style>
+    .home {
+        height: 100%
+    }
+</style>
 

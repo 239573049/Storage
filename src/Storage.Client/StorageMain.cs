@@ -25,11 +25,11 @@ public partial class StorageMain : Form
 #endif
         services.AddStorage(configuration);
         services.AddMinio(configuration);
-
+        services.AddMasaBlazor();
         BlazorWebView.HostPage = "wwwroot\\index.html";
         BlazorWebView.Services = services.BuildServiceProvider();
         BlazorWebView.RootComponents.Add<Main>("#app");
-        BlazorWebView.Services.UseDokan();
+        //BlazorWebView.Services.UseDokan();
     }
 
     private void StorageNotify_MouseDoubleClick(object sender, MouseEventArgs e)

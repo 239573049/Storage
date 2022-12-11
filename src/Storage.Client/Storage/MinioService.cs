@@ -1,9 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using DokanNet;
-using Microsoft.Extensions.Options;
 using Minio;
 using Minio.DataModel;
-using Storage.Host.Options;
 using System.Reactive.Linq;
 using System.Security.AccessControl;
 using System.Text;
@@ -11,6 +9,8 @@ using Storage.Host.Caches;
 using System.Drawing;
 using System;
 using System.Diagnostics;
+using Storage.Client.Options;
+using Storage.Client.Helpers;
 
 namespace Storage.Host.Storage;
 
@@ -22,9 +22,9 @@ public class MinioService : IStorageService, IDisposable
     private readonly MinioClient _client;
     private readonly MinioOptions _minio;
 
-    public MinioService(IOptions<MinioOptions> minio)
+    public MinioService()
     {
-        _minio = minio.Value;
+        _minio = ConfigHelper.GetMinioOptions();
         _client = new MinioClient()
             .WithEndpoint(_minio.Endpoint, _minio.Port)
             .WithCredentials(_minio.AccessKey, _minio.SecretKey)
@@ -83,7 +83,7 @@ public class MinioService : IStorageService, IDisposable
                     }
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
             }
         }
@@ -111,7 +111,7 @@ public class MinioService : IStorageService, IDisposable
         }
 
         Console.ForegroundColor = ConsoleColor.DarkRed;
-        Console.WriteLine(message, args);
+        Debug.WriteLine(message, args);
 #endif
     }
 
@@ -231,8 +231,9 @@ public class MinioService : IStorageService, IDisposable
             _client.CopyObjectAsync(args).GetAwaiter().GetResult();
             _client.RemoveObjectAsync(removeObjectArgs).GetAwaiter().GetResult();
         }
-        catch
+        catch(Exception exception)
         {
+            Error("MoveDirectory exception :{0}", exception);
             return false;
         }
 
@@ -370,6 +371,7 @@ public class MinioService : IStorageService, IDisposable
         }
         catch (Exception exception)
         {
+            Error("ReadFile exception :{0}", exception);
             bytesRead = 0;
         }
 
@@ -544,7 +546,11 @@ public class MinioService : IStorageService, IDisposable
         {
             return true;
         }
-
+        
+        if (path.EndsWith("HEAD"))
+        {
+            return false;
+        }
         Info("{0}=> path:{1} ", nameof(ExistFile), path);
         var o = new ListObjectsArgs();
         o.WithBucket(_minio.BucketName);
@@ -554,8 +560,13 @@ public class MinioService : IStorageService, IDisposable
             var data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
             return data?.IsDir == false;
         }
-        catch
+        catch (InvalidOperationException)
         {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            Error("ExistFile exception :{0} path:{1}", exception, path);
             return false;
         }
     }
@@ -564,7 +575,7 @@ public class MinioService : IStorageService, IDisposable
     {
         GetPath(ref path);
 
-
+        // TODO:由于Minio不存在文件夹概念 所以需要创建文件就自动存在文件夹 
         var stream = new MemoryStream(Encoding.UTF8.GetBytes("desktop"));
 
         try
@@ -591,6 +602,7 @@ public class MinioService : IStorageService, IDisposable
         out long totalNumberOfFreeBytes,
         IDokanFileInfo info)
     {
+        // TODO:设置硬盘显示的数据
         totalNumberOfBytes = (long)1024 * 1024 * 1024 * 1024;
         freeBytesAvailable = Convert.ToInt64(0.95 * totalNumberOfBytes);
         totalNumberOfFreeBytes =
@@ -613,32 +625,36 @@ public class MinioService : IStorageService, IDisposable
         DateTime? lastWriteTime,
         IDokanFileInfo info)
     {
-        GetPath(ref fileName);
+        // TODO: 由于已经增加固定时间无响应自动发送合并所以先注释
+        //GetPath(ref fileName);
+        //if (_writeCache.Remove(fileName, out var cache))
+        //{
+        //    WriteCache(cache!, GetPutObject(fileName, cache.MemoryStream.Length), false);
 
-        if (_writeCache.Remove(fileName, out var cache))
-        {
-            WriteCache(cache!, GetPutObject(fileName, cache.MemoryStream.Length), false);
+        //    var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
+        //        .WithBucket(_minio.BucketName)
+        //        .WithObject(fileName)
+        //        .WithUploadId(cache.UploadId)
+        //        .WithETags(cache.Etags);
 
-            var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
-                .WithBucket(_minio.BucketName)
-                .WithObject(fileName)
-                .WithUploadId(cache.UploadId)
-                .WithETags(cache.Etags);
-
-            await _client.CompleteMultipartUploadAsync(completeMultipartUploadArgs, CancellationToken.None)
-                .ConfigureAwait(false);
-        }
+        //    await _client.CompleteMultipartUploadAsync(completeMultipartUploadArgs, CancellationToken.None)
+        //        .ConfigureAwait(false);
+        //}
     }
 
     public bool ExistDirectory(string path)
     {
         GetPath(ref path);
-
-
+        
         // 当path为空是说明查询的是根目录 根目录一定存在
         if (string.IsNullOrEmpty(path))
         {
             return true;
+        }
+
+        if (path.EndsWith("HEAD"))
+        {
+            return false;
         }
 
         Info("{0}=> path:{1} ", nameof(ExistDirectory), path);
@@ -651,8 +667,13 @@ public class MinioService : IStorageService, IDisposable
             var data = _client.ListObjectsAsync(o).GetAwaiter().GetResult();
             return data?.IsDir == true;
         }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
         catch (Exception exception)
         {
+            Error("ExistDirectory exception :{0} path:{1}", exception,path);
             return false;
         }
     }

@@ -44,7 +44,6 @@ partial class StorageMain
             this.BlazorWebView.Name = "BlazorWebView";
             this.BlazorWebView.Size = new System.Drawing.Size(800, 450);
             this.BlazorWebView.TabIndex = 0;
-            this.BlazorWebView.Text = "blazorWebView1";
             // 
             // StorageNotify
             // 
@@ -58,12 +57,12 @@ partial class StorageMain
             this.NotifyMenus.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.退出管理ToolStripMenuItem});
             this.NotifyMenus.Name = "NotifyMenus";
-            this.NotifyMenus.Size = new System.Drawing.Size(181, 48);
+            this.NotifyMenus.Size = new System.Drawing.Size(125, 26);
             // 
             // 退出管理ToolStripMenuItem
             // 
             this.退出管理ToolStripMenuItem.Name = "退出管理ToolStripMenuItem";
-            this.退出管理ToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.退出管理ToolStripMenuItem.Size = new System.Drawing.Size(124, 22);
             this.退出管理ToolStripMenuItem.Text = "退出管理";
             this.退出管理ToolStripMenuItem.Click += new System.EventHandler(this.ExitToolStripMenuItem_Click);
             // 

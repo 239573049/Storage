@@ -1,6 +1,6 @@
 ﻿using DokanNet;
 using System.Security.AccessControl;
-using DokanOptions = Storage.Host.Options.DokanOptions;
+using DokanOptions = Storage.Client.Options.DokanOptions;
 using FileAccess = DokanNet.FileAccess;
 
 namespace Storage.Host;
@@ -30,7 +30,6 @@ public class IntegrationOperations : IDokanOperations
         if (fName.IndexOf("desktop.ini", StringComparison.Ordinal) > 0 ||
                                     fName.IndexOf("autorun.ini", StringComparison.Ordinal) > 0)
             return DokanResult.FileNotFound;
-
 
         var result = DokanResult.Success;
         if (info.IsDirectory)
@@ -90,8 +89,6 @@ public class IntegrationOperations : IDokanOperations
                                 return DokanResult.AccessDenied;
 
                             info.IsDirectory = pathIsDirectory;
-                            //info.Context = new object();
-
                             return DokanResult.Success;
                         }
                     }
