@@ -260,8 +260,6 @@ public class MinioService : IStorageService, IDisposable
             return DokanResult.Success;
         }
 
-
-
         Info("{0}=> fileName:{1}  IsDirectory:{2}", nameof(GetFileInformation), fileName, info.IsDirectory);
         var o = new ListObjectsArgs();
         o.WithBucket(_minio.BucketName);

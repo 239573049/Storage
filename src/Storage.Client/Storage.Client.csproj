@@ -5,8 +5,10 @@
 		<Nullable>enable</Nullable>
 		<UseWindowsForms>true</UseWindowsForms>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<UserSecretsId>355c780f-f771-4e16-a8b9-feaa7b0e7f59</UserSecretsId>
 	</PropertyGroup>
 	<ItemGroup>
+		<PackageReference Include="Aliyun.OSS.SDK.NetCore" Version="2.13.0" />
 		<PackageReference Include="DokanNet" Version="2.0.5.1" />
 		<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="7.0.0" />
 		<PackageReference Include="System.ServiceProcess.ServiceController" Version="7.0.0" />
