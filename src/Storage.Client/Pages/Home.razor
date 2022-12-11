@@ -1,6 +1,4 @@
 ﻿@page "/"
-@using Storage.Host
-
 
 <div class="home">
     <MSelect @bind-Value="@_selectValue"
@@ -129,6 +127,7 @@
     protected override void OnInitialized()
     {
         _dokanOptions = ConfigHelper.GetDokanOptions();
+        _dokanOptions.ServiceState = StorageHostExtension.StartMinio;
         _minioOptions = ConfigHelper.GetMinioOptions();
         base.OnInitialized();
     }

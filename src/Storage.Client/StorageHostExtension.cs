@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Storage.Client.Helpers;
 using Storage.Client.Options;
 using Storage.Host;
 using Storage.Host.Storage;
@@ -12,6 +13,9 @@ namespace Storage.Client;
 public static class StorageHostExtension
 {
     private static DokanInstance? _dokanInstance;
+    private static bool startMinio;
+
+    public static bool StartMinio => startMinio;
 
     public static IServiceCollection AddStorage(this IServiceCollection services, IConfiguration configuration)
     {
@@ -37,24 +41,37 @@ public static class StorageHostExtension
     {
         _ = Task.Factory.StartNew(() =>
         {
+            if (startMinio)
+            {
+                return;
+            }
 
-            dokanOptions ??= app.GetRequiredService<IOptions<Options.DokanOptions>>().Value;
+            try
+            {
 
-            var manualReset = new ManualResetEvent(false);
-            var dokan = new Dokan(new DokanNet.Logging.NullLogger());
+                startMinio = true;
+                dokanOptions ??= ConfigHelper.GetDokanOptions();
 
-            var dokanOperations = app.GetRequiredService<IDokanOperations>();
+                var manualReset = new ManualResetEvent(false);
+                var dokan = new Dokan(new DokanNet.Logging.NullLogger());
 
-            var dokanBuilder = new DokanInstanceBuilder(dokan)
-                .ConfigureLogger(() => new DokanNet.Logging.NullLogger())
-                .ConfigureOptions(options =>
-                {
-                    options.Options = DokanOptions.FixedDrive;
-                    options.MountPoint = dokanOptions.MountPoint;
-                });
+                var dokanOperations = app.GetRequiredService<IDokanOperations>();
 
-            _dokanInstance = dokanBuilder.Build(dokanOperations);
-            manualReset.WaitOne();
+                var dokanBuilder = new DokanInstanceBuilder(dokan)
+                    .ConfigureLogger(() => new DokanNet.Logging.NullLogger())
+                    .ConfigureOptions(options =>
+                    {
+                        options.Options = DokanOptions.FixedDrive;
+                        options.MountPoint = dokanOptions.MountPoint;
+                    });
+
+                _dokanInstance = dokanBuilder.Build(dokanOperations);
+                manualReset.WaitOne();
+            }
+            catch (Exception e)
+            {
+                startMinio = false;
+            }
         });
 
     }
@@ -66,7 +83,11 @@ public static class StorageHostExtension
     {
         try
         {
-            _dokanInstance?.Dispose();
+            if (startMinio)
+            {
+                _dokanInstance?.Dispose();
+                startMinio = false;
+            }
         }
         catch
         {

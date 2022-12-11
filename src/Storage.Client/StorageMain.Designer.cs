@@ -34,6 +34,8 @@ partial class StorageMain
             this.StorageNotify = new System.Windows.Forms.NotifyIcon(this.components);
             this.NotifyMenus = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.退出管理ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.minioToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.启动关闭Minio映射ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.NotifyMenus.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -55,9 +57,10 @@ partial class StorageMain
             // NotifyMenus
             // 
             this.NotifyMenus.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.退出管理ToolStripMenuItem});
+            this.退出管理ToolStripMenuItem,
+            this.minioToolStripMenuItem});
             this.NotifyMenus.Name = "NotifyMenus";
-            this.NotifyMenus.Size = new System.Drawing.Size(125, 26);
+            this.NotifyMenus.Size = new System.Drawing.Size(125, 48);
             // 
             // 退出管理ToolStripMenuItem
             // 
@@ -65,6 +68,21 @@ partial class StorageMain
             this.退出管理ToolStripMenuItem.Size = new System.Drawing.Size(124, 22);
             this.退出管理ToolStripMenuItem.Text = "退出管理";
             this.退出管理ToolStripMenuItem.Click += new System.EventHandler(this.ExitToolStripMenuItem_Click);
+            // 
+            // minioToolStripMenuItem
+            // 
+            this.minioToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.启动关闭Minio映射ToolStripMenuItem});
+            this.minioToolStripMenuItem.Name = "minioToolStripMenuItem";
+            this.minioToolStripMenuItem.Size = new System.Drawing.Size(124, 22);
+            this.minioToolStripMenuItem.Text = "Minio";
+            // 
+            // 启动关闭Minio映射ToolStripMenuItem
+            // 
+            this.启动关闭Minio映射ToolStripMenuItem.Name = "启动关闭Minio映射ToolStripMenuItem";
+            this.启动关闭Minio映射ToolStripMenuItem.Size = new System.Drawing.Size(186, 22);
+            this.启动关闭Minio映射ToolStripMenuItem.Text = "启动/关闭Minio映射";
+            this.启动关闭Minio映射ToolStripMenuItem.Click += new System.EventHandler(this.MinioMapToolStripMenuItem_Click);
             // 
             // StorageMain
             // 
@@ -86,4 +104,6 @@ partial class StorageMain
     private NotifyIcon StorageNotify;
     private ContextMenuStrip NotifyMenus;
     private ToolStripMenuItem 退出管理ToolStripMenuItem;
+    private ToolStripMenuItem minioToolStripMenuItem;
+    private ToolStripMenuItem 启动关闭Minio映射ToolStripMenuItem;
 }

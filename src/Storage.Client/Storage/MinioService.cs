@@ -82,12 +82,12 @@ public class MinioService : IStorageService, IDisposable
         }
 
         WriteCache(writeCache!, GetPutObject(writeCache!.FileName, writeCache.MemoryStream.Length),
-            false);
+            false, true);
 
         var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
             .WithBucket(_minio.BucketName)
             .WithObject(writeCache.FileName)
-            .WithUploadId(writeCache.FileName)
+            .WithUploadId(writeCache.UploadId)
             .WithETags(writeCache.Etags);
 
         await _client.CompleteMultipartUploadAsync(completeMultipartUploadArgs, CancellationToken.None)
@@ -103,7 +103,7 @@ public class MinioService : IStorageService, IDisposable
         }
 
         Console.ForegroundColor = ConsoleColor.Blue;
-        Console.WriteLine(message, args);
+        Debug.WriteLine(message, args);
 #endif
     }
 
@@ -410,6 +410,7 @@ public class MinioService : IStorageService, IDisposable
 
         if (offset == 0)
         {
+            // TODO：当第一次写入时小于设置的切片先添加到缓存
             if (buffer.Length < ReadSize)
             {
                 var memoryStream = new MemoryStream();
@@ -425,6 +426,7 @@ public class MinioService : IStorageService, IDisposable
             }
             else
             {
+                // TODO: 如果第一次上传大于切片将提交第一次切片
                 var multipartUploadArgs = new NewMultipartUploadPutArgs()
                     .WithBucket(_minio.BucketName)
                     .WithContentType(null)
@@ -456,6 +458,7 @@ public class MinioService : IStorageService, IDisposable
             _writeCache.TryGetValue(fileName, out var writeCache);
             if (writeCache != null)
             {
+                // TODO： 将数据写入缓存
                 writeCache!.MemoryStream.Write(buffer);
                 writeCache.UpdateTime = DateTime.Now;
                 WriteCache(writeCache, put);
@@ -467,9 +470,10 @@ public class MinioService : IStorageService, IDisposable
         return NtStatus.Success;
     }
 
-    private void WriteCache(MinioWriteCache writeCache, PutObjectPartArgs put, bool newMemory = true)
+    private void WriteCache(MinioWriteCache writeCache, PutObjectPartArgs put, bool newMemory = true, bool section = false)
     {
-        if (writeCache.MemoryStream.Length >= ReadSize)
+        // TODO:如果缓存数据小于切片将不启用切片
+        if (writeCache.MemoryStream.Length >= ReadSize || section)
         {
             Console.WriteLine("WriteCache size:{0}", writeCache.MemoryStream.Length);
             var s = Stopwatch.StartNew();
