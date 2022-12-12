@@ -45,8 +45,8 @@ public static class StorageHostExtension
                     {
                         options.Options = DokanOptions.FixedDrive;
                         options.MountPoint = dokanOptions.MountPoint;
-                        // 是否开启多线程
-                        options.SingleThread = true;
+                        // 是否单线程
+                        options.SingleThread = false;
                     });
 
                 switch (storageDokan)
