@@ -1,5 +1,6 @@
 using Storage.Client.Helpers;
 using Storage.Client.Options;
+using Storage.Client.Storage;
 using System.Diagnostics;
 using System.ServiceProcess;
 
@@ -10,41 +11,40 @@ public partial class StorageMain : Form
     public StorageMain()
     {
         InitializeComponent();
-        MinioGroup.Hide();
 
         Control.CheckForIllegalCrossThreadCalls = false;
 
         StorageNotify.ContextMenuStrip = NotifyMenus;
 
-        LoadMapList();
         LoadConfig();
     }
 
     private void LoadConfig()
     {
-        var minio = ConfigHelper.GetMinioOptions();
-        var dokan = ConfigHelper.GetDokanOptions();
-        AccessKey.Text = minio?.AccessKey;
-        SecretKey.Text = minio?.SecretKey;
-        BucketName.Text = minio?.BucketName;
-        VolumeLabel.Text = minio?.VolumeLabel;
-        Port.Text = minio.Port.ToString();
-        Endpoint.Text = minio.Endpoint;
-
-        StartDefault.Checked = dokan.StartDefault;
-        MountPoint.Text = dokan.MountPoint;
-        MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinio ? Constant.StopServer : Constant.StartServer;
-
+        var minIo = ConfigHelper.GetMinIoOptions();
+        MinIoAccessKey.Text = minIo?.AccessKey;
+        MinIoSecretKey.Text = minIo?.SecretKey;
+        MinIoBucketName.Text = minIo?.BucketName;
+        MinIoVolumeLabel.Text = minIo?.VolumeLabel;
+        MinIoPort.Text = minIo.Port.ToString();
+        MinIoEndpoint.Text = minIo.Endpoint;
+        StartDefault.Checked = minIo.StartDefault;
+        MountPoint.Text = minIo.MountPoint;
+        MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.MinIo) ? Constant.StopServer : Constant.StartServer;
         AddWindowServer.Text = ServiceController
             .GetServices().Any(x => x.ServiceName == Constant.ServerName) ? Constant.AddWindowServer : Constant.DeleteWindowServer;
+
+        var oss = ConfigHelper.GetOssOptions();
+        OssAccessKeyId.Text = oss.AccessKeyId;
+        OssAccessKeySecret.Text = oss.AccessKeySecret;
+        OssBucketName.Text = oss.BucketName;
+        OssMountPoint.Text = oss.MountPoint;
+        OssEndpoint.Text = oss.Endpoint;
+        OssStartDefault.Checked = oss.StartDefault;
+        OssMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.Oss) ? Constant.StopServer : Constant.StartServer;
+
     }
 
-    private void LoadMapList()
-    {
-        MapList.Items.Add("Minio");
-        MapList.Items.Add("Oss");
-        MapList.SelectedIndex = 0;
-    }
 
     private void StorageNotify_MouseDoubleClick(object sender, MouseEventArgs e)
     {
@@ -58,19 +58,19 @@ public partial class StorageMain : Form
         Close();
     }
 
-    private void MinioMapToolStripMenuItem_Click(object sender, EventArgs e)
+    private void MinIoMapToolStripMenuItem_Click(object sender, EventArgs e)
     {
-        if (StorageHostExtension.StartMinio)
+        if (StorageHostExtension.StartMinIo(StorageDokan.MinIo))
         {
-            StorageHostExtension.Stop();
-            MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinio ? Constant.StopServer : Constant.StartServer;
+            StorageHostExtension.Stop(StorageDokan.MinIo);
+            MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.MinIo) ? Constant.StopServer : Constant.StartServer;
         }
         else
         {
-            Program.ServiceProvider.UseDokan(null, succeed =>
+            Program.ServiceProvider.UseDokan(ConfigHelper.GetMinIoOptions(), StorageDokan.MinIo, succeed =>
             {
-                ServerButton.Text = StorageHostExtension.StartMinio ? Constant.StopServer : Constant.StartServer;
-                MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinio ? Constant.StopServer : Constant.StartServer;
+                ServerButton.Text = StorageHostExtension.StartMinIo(StorageDokan.MinIo) ? Constant.StopServer : Constant.StartServer;
+                MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.MinIo) ? Constant.StopServer : Constant.StartServer;
             });
         }
     }
@@ -97,26 +97,18 @@ public partial class StorageMain : Form
     {
         try
         {
-            var port = Convert.ToInt16(Port.Text);
+            var port = Convert.ToInt16(MinIoPort.Text);
 
-            var minio = new MinioOptions()
+            var minIo = new MinIoOptions()
             {
-                AccessKey = AccessKey.Text,
-                SecretKey = SecretKey.Text,
-                BucketName = BucketName.Text,
-                Endpoint = Endpoint.Text,
+                AccessKey = MinIoAccessKey.Text,
+                SecretKey = MinIoSecretKey.Text,
+                BucketName = MinIoBucketName.Text,
+                Endpoint = MinIoEndpoint.Text,
                 Port = port,
-                VolumeLabel = VolumeLabel.Text
+                VolumeLabel = MinIoVolumeLabel.Text
             };
-
-            var dokan = new DokanOptions()
-            {
-                StartDefault = StartDefault.Checked,
-                MountPoint = MountPoint.Text,
-            };
-
-            ConfigHelper.SaveMinioOptions(minio);
-            ConfigHelper.SaveDokanOptions(dokan);
+            ConfigHelper.SaveMinIoOptions(minIo);
         }
         catch (FormatException)
         {
@@ -132,18 +124,18 @@ public partial class StorageMain : Form
     {
         try
         {
-            if (StorageHostExtension.StartMinio)
+            if (StorageHostExtension.StartMinIo(StorageDokan.MinIo))
             {
-                StorageHostExtension.Stop();
-                ServerButton.Text = StorageHostExtension.StartMinio ? Constant.StopServer : Constant.StartServer;
-                MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinio ? Constant.StopServer : Constant.StartServer;
+                StorageHostExtension.Stop(StorageDokan.MinIo);
+                ServerButton.Text = StorageHostExtension.StartMinIo(StorageDokan.MinIo) ? Constant.StopServer : Constant.StartServer;
+                MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.MinIo) ? Constant.StopServer : Constant.StartServer;
             }
             else
             {
-                Program.ServiceProvider.UseDokan(null, succeed =>
+                Program.ServiceProvider.UseDokan(ConfigHelper.GetMinIoOptions()!, StorageDokan.MinIo, succeed =>
                 {
-                    ServerButton.Text = StorageHostExtension.StartMinio ? Constant.StopServer : Constant.StartServer;
-                    MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinio ? Constant.StopServer : Constant.StartServer;
+                    ServerButton.Text = StorageHostExtension.StartMinIo(StorageDokan.MinIo) ? Constant.StopServer : Constant.StartServer;
+                    MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.MinIo) ? Constant.StopServer : Constant.StartServer;
                 });
             }
         }
@@ -151,20 +143,6 @@ public partial class StorageMain : Form
         {
         }
 
-    }
-
-    private void MapList_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        var comboBox = sender as ComboBox;
-        var index = comboBox?.SelectedIndex;
-        if (index == 0)
-        {
-            MinioGroup.Show();
-        }
-        else
-        {
-            MinioGroup.Hide();
-        }
     }
 
     private void tabControl1_SizeChanged(object sender, EventArgs e)
@@ -196,7 +174,7 @@ public partial class StorageMain : Form
             }
         };
         process.Start();
-        process.StandardInput.WriteLine(code);
+        await process.StandardInput.WriteLineAsync(code);
         process.StandardInput.Close();
         await process.WaitForExitAsync();
         Debug.WriteLine(process.StandardOutput.ReadToEnd());
@@ -210,5 +188,68 @@ public partial class StorageMain : Form
     {
         ShowInTaskbar = false;
         Hide();
+    }
+
+    private void OssSaveConfig_Click(object sender, EventArgs e)
+    {
+        try
+        {
+            var ossOptions = new OssOptions()
+            {
+                AccessKeyId = OssAccessKeyId.Text,
+                AccessKeySecret = OssAccessKeySecret.Text,
+                BucketName = OssBucketName.Text,
+                Endpoint = OssEndpoint.Text,
+                MountPoint = OssMountPoint.Text,
+                StartDefault = OssStartDefault.Checked,
+                VolumeLabel = OssVolumeLabel.Text
+            };
+            ConfigHelper.SaveOssOptions(ossOptions);
+        }
+        catch (Exception)
+        {
+            MessageBox.Show("映射配置数据错误");
+        }
+    }
+
+    private void OssStartServer_Click(object sender, EventArgs e)
+    {
+        try
+        {
+            if (StorageHostExtension.StartMinIo(StorageDokan.MinIo))
+            {
+                StorageHostExtension.Stop(StorageDokan.Oss);
+                OssServerButton.Text = StorageHostExtension.StartMinIo(StorageDokan.Oss) ? Constant.StopServer : Constant.StartServer;
+                OssMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.Oss) ? Constant.StopServer : Constant.StartServer;
+            }
+            else
+            {
+                Program.ServiceProvider.UseDokan(ConfigHelper.GetMinIoOptions()!, StorageDokan.Oss, succeed =>
+                {
+                    OssServerButton.Text = StorageHostExtension.StartMinIo(StorageDokan.Oss) ? Constant.StopServer : Constant.StartServer;
+                    OssMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.Oss) ? Constant.StopServer : Constant.StartServer;
+                });
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private void OssMapToolStripMenuItem_Click(object sender, EventArgs e)
+    {
+        if (StorageHostExtension.StartMinIo(StorageDokan.Oss))
+        {
+            StorageHostExtension.Stop(StorageDokan.Oss);
+            MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.Oss) ? Constant.StopServer : Constant.StartServer;
+        }
+        else
+        {
+            Program.ServiceProvider.UseDokan(ConfigHelper.GetOssOptions(), StorageDokan.Oss, succeed =>
+            {
+                ServerButton.Text = StorageHostExtension.StartMinIo(StorageDokan.Oss) ? Constant.StopServer : Constant.StartServer;
+                MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.Oss) ? Constant.StopServer : Constant.StartServer;
+            });
+        }
     }
 }

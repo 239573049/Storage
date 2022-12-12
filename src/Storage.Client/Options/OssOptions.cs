@@ -1,6 +1,6 @@
 ﻿namespace Storage.Client.Options;
 
-public class OssOptions
+public class OssOptions : BaseDokanOptions
 {
     public string AccessKeyId { get; set; }
 
@@ -12,4 +12,6 @@ public class OssOptions
     /// 存储空间
     /// </summary>
     public string BucketName { get; set; }
+
+    public string VolumeLabel { get; set; } = "Token";
 }

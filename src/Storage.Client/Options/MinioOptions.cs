@@ -1,6 +1,6 @@
 ﻿namespace Storage.Client.Options;
 
-public class MinioOptions
+public class MinIoOptions : BaseDokanOptions
 {
     /// <summary>
     /// minio AccessKey
