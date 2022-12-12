@@ -3,12 +3,12 @@ using Minio;
 using Minio.DataModel;
 using Storage.Client.Helpers;
 using Storage.Client.Options;
-using Storage.Host.Caches;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reactive.Linq;
 using System.Security.AccessControl;
 using System.Text;
+using Storage.Client.Caches;
 
 namespace Storage.Host.Storage;
 
@@ -18,11 +18,12 @@ public class MinioService : IStorageService, IDisposable
     private readonly ConcurrentDictionary<string, MinioWriteCache> _writeCache = new();
 
     private readonly MinioClient _client;
-    private readonly MinioOptions _minio;
+    private readonly MinioOptions? _minio;
 
     public MinioService()
     {
         _minio = ConfigHelper.GetMinioOptions();
+        
         _client = new MinioClient()
             .WithEndpoint(_minio.Endpoint, _minio.Port)
             .WithCredentials(_minio.AccessKey, _minio.SecretKey)
@@ -50,7 +51,7 @@ public class MinioService : IStorageService, IDisposable
             var now = DateTime.Now;
             try
             {
-                foreach (var t in _writeCache.Where(x => x.Value.UpdateTime.AddSeconds(5) < now))
+                foreach (var t in _writeCache.Where(x => x.Value.UpdateTime.AddSeconds(3) < now))
                 {
                     if (_writeCache.TryRemove(t.Key, out var writeCache))
                     {
@@ -213,33 +214,34 @@ public class MinioService : IStorageService, IDisposable
         GetPath(ref path);
         GetPath(ref dest);
 
-        var cpSrcArgs = new CopySourceObjectArgs()
-            .WithBucket(_minio.BucketName)
-            .WithObject(path + '/')
-            .WithCopyConditions(null)
-            .WithServerSideEncryption(null);
+        var listObjectsArgs = new ListObjectsArgs();
+        listObjectsArgs.WithPrefix(path + "/");
+        listObjectsArgs.WithBucket(_minio.BucketName);
+        listObjectsArgs.WithRecursive(true);
+        var list = _client.ListObjectsAsync(listObjectsArgs).ToList().GetAwaiter().GetResult().ToList();
 
-        var args = new CopyObjectArgs()
-            .WithBucket(_minio.BucketName)
-            .WithObject(dest + '/')
-            .WithCopyObjectSource(cpSrcArgs)
-            .WithHeaders(null)
-            .WithServerSideEncryption(null);
-
-        var removeObjectArgs = new RemoveObjectArgs();
-        removeObjectArgs.WithBucket(_minio.BucketName);
-        removeObjectArgs.WithObject(path + '/');
-
-        try
+        foreach (var item in list)
         {
-            _client.CopyObjectAsync(args).GetAwaiter().GetResult();
-            _client.RemoveObjectAsync(removeObjectArgs).GetAwaiter().GetResult();
+            var removeObjectArgs = new RemoveObjectArgs();
+            removeObjectArgs.WithBucket(_minio.BucketName);
+            removeObjectArgs.WithObject(item.Key);
+            
+            try
+            {
+                _client.CopyObjectAsync(_minio.BucketName, item.Key, _minio.BucketName,
+                        item.Key.Replace(path + "/", dest + "/"))
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception e)
+            {
+            }
         }
-        catch (Exception exception)
-        {
-            Error("MoveDirectory exception :{0}", exception);
-            return false;
-        }
+
+        var removeObjects = new RemoveObjectsArgs();
+        removeObjects.WithBucket(_minio.BucketName);
+        removeObjects.WithObjects(list.Select(x => x.Key).ToList());
+        _client.RemoveObjectsAsync(removeObjects).GetAwaiter().GetResult();
 
         return true;
     }
@@ -417,7 +419,6 @@ public class MinioService : IStorageService, IDisposable
                     FileName = fileName,
                     MemoryStream = memoryStream,
                     UpdateTime = DateTime.Now,
-                    Etags = new Dictionary<int, string>()
                 };
                 _writeCache.TryAdd(fileName, writeCache);
             }
