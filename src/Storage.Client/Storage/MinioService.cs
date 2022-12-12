@@ -328,7 +328,7 @@ public class MinioService : IStorageService, IDisposable
 
 
     // 设置上传切片大小
-    const int ReadSize = 1024 * 1024 * 5;
+    private const int ReadSize = 1024 * 1024 * 10;
 
     public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
     {
