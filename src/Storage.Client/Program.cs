@@ -1,6 +1,6 @@
-using Microsoft.Extensions.Configuration;
 using Storage.Client.Helpers;
 using Storage.Client.Options;
+using Storage.Client.Storage;
 using System.Runtime.InteropServices;
 
 namespace Storage.Client;
@@ -26,19 +26,23 @@ internal static class Program
             builder.Host.UseWindowsService();
         }
 
-        
+
         var services = builder.Services;
-        services.AddSingleton(builder.Configuration.GetValue<OssOptions>(nameof(OssOptions)));
         services.AddStorage();
-        services.AddMinio();
 
         var app = builder.Build();
 
-        var option = ConfigHelper.GetDokanOptions();
+        var minIoOptions = ConfigHelper.GetMinIoOptions();
+        var ossOptions = ConfigHelper.GetOssOptions();
 
-        if (option?.StartDefault == true)
+        if (ossOptions?.StartDefault == true)
         {
-            app.Services.UseDokan(null);
+            app.Services.UseDokan(ossOptions, StorageDokan.Oss);
+        }
+
+        if (minIoOptions?.StartDefault == true)
+        {
+            app.Services.UseDokan(minIoOptions, StorageDokan.MinIo);
         }
 
         ServiceProvider = app.Services;
