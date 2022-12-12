@@ -1,13 +1,17 @@
 ﻿using Aliyun.OSS;
 using DokanNet;
+using Minio;
 using Storage.Client.Caches;
 using Storage.Client.Helpers;
 using Storage.Client.Options;
 using Storage.Host;
+using Storage.Host.Caches;
+using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Drawing;
+using System.IO;
 using System.Security.AccessControl;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Storage.Client.Storage;
 
@@ -18,10 +22,53 @@ public class OssService : IStorageService, IDisposable
     private readonly OssOptions _ossOptions;
     private readonly OssClient _client;
     private readonly ConcurrentDictionary<string, ReadCache> _readCaches = new();
+    private readonly ConcurrentDictionary<string, OssWriteCache> _writeCache = new();
     public OssService()
     {
         _ossOptions = ConfigHelper.GetOssOptions();
         _client = new OssClient(_ossOptions.Endpoint, _ossOptions.AccessKeyId, _ossOptions.AccessKeySecret);
+        _ = Task.Factory.StartNew(StartWriteCache);
+    }
+
+    private async void StartWriteCache()
+    {
+        while (!disposable)
+        {
+            await Task.Delay(2000);
+            var now = DateTime.Now;
+            try
+            {
+                foreach (var t in _writeCache.Where(x => x.Value.UpdateTime.AddSeconds(1) < now))
+                {
+                    if (_writeCache.TryRemove(t.Key, out var writeCache))
+                    {
+                        await Upload(writeCache);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+    private async Task Upload(OssWriteCache writeCache)
+    {
+        // TODO:当tag为空时数据是不适合切片的所以需要单独上传
+        if (writeCache.Tags == null || writeCache.Tags?.Any() == false)
+        {
+            _client.PutObject(_ossOptions.BucketName, writeCache.FileName, new MemoryStream(writeCache.MemoryStream.ToArray()));
+            return;
+        }
+
+        WriteCache(writeCache!, false, true);
+
+        var completeMultipartUploadRequest = new CompleteMultipartUploadRequest(_ossOptions.BucketName, writeCache.FileName, writeCache.UploadId);
+
+        foreach (var tag in writeCache.Tags)
+        {
+            completeMultipartUploadRequest.PartETags.Add(tag);
+        }
+        _client.CompleteMultipartUpload(completeMultipartUploadRequest);
     }
 
     public void Dispose()
@@ -38,27 +85,65 @@ public class OssService : IStorageService, IDisposable
         }
     }
 
-    bool IStorageService.CreateDirectory(string path)
+    public bool CreateDirectory(string path)
     {
-        throw new NotImplementedException();
+        GetPath(ref path);
+        try
+        {
+            _client.PutObject(_ossOptions.BucketName, path, new MemoryStream());
+
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
-    bool IStorageService.CreateFile(string path)
+    public bool CreateFile(string path)
     {
-        throw new NotImplementedException();
+        GetPath(ref path);
+        try
+        {
+            _client.PutObject(_ossOptions.BucketName, path, new MemoryStream());
+
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     NtStatus IStorageService.DeleteDirectory(string fileName, IDokanFileInfo info)
     {
-        throw new NotImplementedException();
+        GetPath(ref fileName);
+
+        Info("{0}=> fileName:{1}  IsDirectory:{2}", nameof(DeleteFile), fileName, info.IsDirectory);
+
+        if (!ExistFile(fileName))
+            return DokanResult.FileNotFound;
+
+        _client.DeleteObject(_ossOptions.BucketName, fileName + "/");
+
+        return NtStatus.Success;
     }
 
-    NtStatus IStorageService.DeleteFile(string fileName, IDokanFileInfo info)
+    public NtStatus DeleteFile(string fileName, IDokanFileInfo info)
     {
-        throw new NotImplementedException();
+        GetPath(ref fileName);
+
+        Info("{0}=> fileName:{1}  IsDirectory:{2}", nameof(DeleteFile), fileName, info.IsDirectory);
+
+        if (!ExistFile(fileName))
+            return DokanResult.FileNotFound;
+
+        _client.DeleteObject(_ossOptions.BucketName, fileName);
+
+        return NtStatus.Success;
     }
 
-    bool IStorageService.ExistDirectory(string path)
+    public bool ExistDirectory(string path)
     {
         GetPath(ref path);
 
@@ -74,7 +159,7 @@ public class OssService : IStorageService, IDisposable
         return result;
     }
 
-    bool IStorageService.ExistFile(string path)
+    public bool ExistFile(string path)
     {
         GetPath(ref path);
         if (string.IsNullOrEmpty(path))
@@ -94,7 +179,7 @@ public class OssService : IStorageService, IDisposable
         var name = filePath + "/" + (searchPattern == "*" ? "" : searchPattern);
         name = name.EndsWith('/') ? name : name + '/';
 
-            GetPath(ref name);
+        GetPath(ref name);
         if (name.Length <= 1)
         {
             name = "/";
@@ -141,11 +226,9 @@ public class OssService : IStorageService, IDisposable
     void IStorageService.GetDiskFreeSpace(out long freeBytesAvailable, out long totalNumberOfBytes, out long totalNumberOfFreeBytes, IDokanFileInfo info)
     {
         // TODO:设置硬盘显示的数据
-        totalNumberOfBytes = (long)1024 * 1024 * 1024 * 1024;
-        freeBytesAvailable = Convert.ToInt64(0.95 * totalNumberOfBytes);
-        totalNumberOfFreeBytes =
-            Convert.ToInt64(0.95 * totalNumberOfBytes *
-                            0.95);
+        totalNumberOfBytes = (long)1024 * 1024 * 1024 * 1024 * 1024;
+        freeBytesAvailable = (long)1024 * 1024 * 1024 * 1024 * 1024;
+        totalNumberOfFreeBytes = (long)1024 * 1024 * 1024 * 1024 * 1024;
     }
 
     NtStatus IStorageService.GetFileInformation(string fileName, out FileInformation fileInfo, IDokanFileInfo info)
@@ -253,16 +336,47 @@ public class OssService : IStorageService, IDisposable
 
     bool IStorageService.MoveDirectory(string path, string dest)
     {
-        throw new NotImplementedException();
+        GetPath(ref path);
+        GetPath(ref dest);
+        var copy = new CopyObjectRequest(_ossOptions.BucketName, path + "/", _ossOptions.BucketName, dest + "/");
+        var delete = new DeleteObjectRequest(_ossOptions.BucketName, dest + "/");
+
+        try
+        {
+            _client.CopyObject(copy);
+
+            _client.DeleteObject(delete);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
-    bool IStorageService.MoveFile(string oldName, string newName, bool replace, IDokanFileInfo info)
+    public bool MoveFile(string oldName, string newName, bool replace, IDokanFileInfo info)
     {
-        throw new NotImplementedException();
+        GetPath(ref oldName);
+        GetPath(ref newName);
+        var copy = new CopyObjectRequest(_ossOptions.BucketName, oldName, _ossOptions.BucketName, oldName);
+        var delete = new DeleteObjectRequest(_ossOptions.BucketName, newName);
+
+        try
+        {
+            _client.CopyObject(copy);
+
+            _client.DeleteObject(delete);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
     }
 
     // 设置上传切片大小
-    const int ReadSize = 1024 * 1024 * 10;
+    const int ReadSize = 1024 * 1024 * 5;
 
     public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
     {
@@ -309,12 +423,109 @@ public class OssService : IStorageService, IDisposable
 
     void IStorageService.SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime, DateTime? lastWriteTime, IDokanFileInfo info)
     {
-        throw new NotImplementedException();
+        GetPath(ref fileName);
+        if (_writeCache.Remove(fileName, out var cache))
+        {
+            WriteCache(cache, false);
+            _ = Task.Run(async () =>
+            {
+                await Upload(cache);
+            });
+        }
     }
 
     NtStatus IStorageService.WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
     {
-        throw new NotImplementedException();
+        GetPath(ref fileName);
+
+        if (offset == 0)
+        {
+            // TODO：当第一次写入时小于设置的切片先添加到缓存
+            if (buffer.Length < ReadSize)
+            {
+                var memoryStream = new MemoryStream();
+                memoryStream.Write(buffer);
+                var writeCache = new OssWriteCache
+                {
+                    FileName = fileName,
+                    MemoryStream = memoryStream,
+                    UpdateTime = DateTime.Now,
+                };
+                _writeCache.TryAdd(fileName, writeCache);
+            }
+            else
+            {
+                var request = new InitiateMultipartUploadRequest(_ossOptions.BucketName, fileName);
+                var result = _client.InitiateMultipartUpload(request);
+
+                var uploadPart = new UploadPartRequest(_ossOptions.BucketName, fileName, result.UploadId)
+                {
+                    InputStream = new MemoryStream(buffer),
+                    PartSize = buffer.Length,
+                    PartNumber = 1
+                };
+                // 调用UploadPart接口执行上传功能，返回结果中包含了这个数据片的ETag值。
+                var resultUpload = _client.UploadPart(uploadPart);
+                var writeCache = new OssWriteCache
+                {
+                    FileName = fileName,
+                    UpdateTime = DateTime.Now,
+                    UploadId = result.UploadId,
+                    PartNumber = 1
+                };
+                writeCache.Tags.Add(resultUpload.PartETag);
+                _writeCache.TryAdd(fileName, writeCache);
+            }
+        }
+        else
+        {
+            _writeCache.TryGetValue(fileName, out var writeCache);
+
+            if (writeCache != null)
+            {
+                // TODO： 将数据写入缓存
+                writeCache!.MemoryStream.Write(buffer);
+                writeCache.UpdateTime = DateTime.Now;
+                WriteCache(writeCache);
+            }
+        }
+        bytesWritten = buffer.Length;
+        return NtStatus.Success;
+    }
+
+
+    private void WriteCache(OssWriteCache writeCache, bool newMemory = true, bool section = false)
+    {
+        // TODO:如果缓存数据小于切片将不启用切片
+        if (writeCache.MemoryStream.Length >= ReadSize || section)
+        {
+            Console.WriteLine("WriteCache size:{0}", writeCache.MemoryStream.Length);
+            var s = Stopwatch.StartNew();
+            writeCache!.PartNumber += 1;
+            if (string.IsNullOrEmpty(writeCache.UploadId))
+            {
+                var request = new InitiateMultipartUploadRequest(_ossOptions.BucketName, writeCache.FileName);
+                var result = _client.InitiateMultipartUpload(request);
+                writeCache.UploadId = result.UploadId;
+            }
+
+            var uploadPart = new UploadPartRequest(_ossOptions.BucketName, writeCache.FileName, writeCache.UploadId)
+            {
+                InputStream = new MemoryStream(writeCache.MemoryStream.ToArray()),
+                PartSize = writeCache.MemoryStream.Length,
+                PartNumber = writeCache.PartNumber + 1,
+            };
+
+            var resultUpload = _client.UploadPart(uploadPart);
+
+            writeCache.Tags.Add(resultUpload.PartETag);
+            s.Stop();
+            Info("{0}=> 耗时2：{1}ms", nameof(WriteCache), s.ElapsedMilliseconds);
+            if (newMemory)
+            {
+                writeCache.MemoryStream = new MemoryStream();
+            }
+        }
     }
 
     private static string TrimStart(string value, string search)

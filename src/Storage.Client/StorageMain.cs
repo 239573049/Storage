@@ -1,6 +1,7 @@
 using Storage.Client.Helpers;
 using Storage.Client.Options;
 using Storage.Client.Storage;
+using Storage.Host.Storage;
 using System.Diagnostics;
 using System.ServiceProcess;
 
@@ -28,7 +29,7 @@ public partial class StorageMain : Form
         MinIoVolumeLabel.Text = minIo?.VolumeLabel;
         MinIoPort.Text = minIo.Port.ToString();
         MinIoEndpoint.Text = minIo.Endpoint;
-        StartDefault.Checked = minIo.StartDefault;
+        MinIoStartDefault.Checked = minIo.StartDefault;
         MountPoint.Text = minIo.MountPoint;
         MinioMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.MinIo) ? Constant.StopServer : Constant.StartServer;
         AddWindowServer.Text = ServiceController
@@ -106,6 +107,7 @@ public partial class StorageMain : Form
                 BucketName = MinIoBucketName.Text,
                 Endpoint = MinIoEndpoint.Text,
                 Port = port,
+                StartDefault = MinIoStartDefault.Checked,
                 VolumeLabel = MinIoVolumeLabel.Text
             };
             ConfigHelper.SaveMinIoOptions(minIo);

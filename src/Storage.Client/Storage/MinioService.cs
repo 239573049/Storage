@@ -1,6 +1,7 @@
 ﻿using DokanNet;
 using Minio;
 using Minio.DataModel;
+using Storage.Client.Caches;
 using Storage.Client.Helpers;
 using Storage.Client.Options;
 using Storage.Host.Caches;
@@ -9,7 +10,6 @@ using System.Diagnostics;
 using System.Reactive.Linq;
 using System.Security.AccessControl;
 using System.Text;
-using Storage.Client.Caches;
 
 namespace Storage.Host.Storage;
 
@@ -53,7 +53,7 @@ public class MinioService : IStorageService, IDisposable
             var now = DateTime.Now;
             try
             {
-                foreach (var t in _writeCache.Where(x => x.Value.UpdateTime.AddSeconds(5) < now))
+                foreach (var t in _writeCache.Where(x => x.Value.UpdateTime.AddSeconds(1) < now))
                 {
                     if (_writeCache.TryRemove(t.Key, out var writeCache))
                     {
