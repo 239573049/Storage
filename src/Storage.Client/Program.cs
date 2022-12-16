@@ -53,7 +53,12 @@ internal static class Program
             Application.Run(new StorageMain());
         });
 
+        app.UseApi();
         app.Run();
+    }
 
+    private static void UseApi(this IEndpointRouteBuilder app)
+    {
+        app.MapPut("/api/minio-config", () => "");
     }
 }
