@@ -23,7 +23,7 @@ public class MinioService : IStorageService, IDisposable
     private readonly MinioClient _client;
     private readonly MinIoOptions _minIo;
 
-    public MinioService()
+    public MinioService(FileReadCache fileCache)
     {
         _minIo = ConfigHelper.GetMinIoOptions();
         _client = new MinioClient()
