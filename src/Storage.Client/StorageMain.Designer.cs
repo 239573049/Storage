@@ -59,7 +59,7 @@ partial class StorageMain
             this.label2 = new System.Windows.Forms.Label();
             this.MinIoAccessKey = new System.Windows.Forms.TextBox();
             this.label1 = new System.Windows.Forms.Label();
-            this.StartDefault = new System.Windows.Forms.CheckBox();
+            this.MinIoStartDefault = new System.Windows.Forms.CheckBox();
             this.OssTab = new System.Windows.Forms.TabPage();
             this.flowLayoutPanel2 = new System.Windows.Forms.FlowLayoutPanel();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
@@ -222,7 +222,7 @@ partial class StorageMain
             this.MinioGroup.Controls.Add(this.label2);
             this.MinioGroup.Controls.Add(this.MinIoAccessKey);
             this.MinioGroup.Controls.Add(this.label1);
-            this.MinioGroup.Controls.Add(this.StartDefault);
+            this.MinioGroup.Controls.Add(this.MinIoStartDefault);
             this.MinioGroup.Location = new System.Drawing.Point(3, 3);
             this.MinioGroup.Name = "MinioGroup";
             this.MinioGroup.Size = new System.Drawing.Size(680, 360);
@@ -391,15 +391,15 @@ partial class StorageMain
             // 
             // StartDefault
             // 
-            this.StartDefault.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            this.MinIoStartDefault.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
-            this.StartDefault.AutoSize = true;
-            this.StartDefault.Location = new System.Drawing.Point(59, 40);
-            this.StartDefault.Name = "StartDefault";
-            this.StartDefault.Size = new System.Drawing.Size(63, 21);
-            this.StartDefault.TabIndex = 0;
-            this.StartDefault.Text = "自启动";
-            this.StartDefault.UseVisualStyleBackColor = true;
+            this.MinIoStartDefault.AutoSize = true;
+            this.MinIoStartDefault.Location = new System.Drawing.Point(59, 40);
+            this.MinIoStartDefault.Name = "StartDefault";
+            this.MinIoStartDefault.Size = new System.Drawing.Size(63, 21);
+            this.MinIoStartDefault.TabIndex = 0;
+            this.MinIoStartDefault.Text = "自启动";
+            this.MinIoStartDefault.UseVisualStyleBackColor = true;
             // 
             // OssTab
             // 
@@ -665,7 +665,7 @@ partial class StorageMain
     private Label label2;
     private TextBox MinIoAccessKey;
     private Label label1;
-    private CheckBox StartDefault;
+    private CheckBox MinIoStartDefault;
     private FlowLayoutPanel flowLayoutPanel2;
     private GroupBox groupBox1;
     private TextBox OssMountPoint;
