@@ -1,7 +1,7 @@
 ﻿using DokanNet;
+using Storage.Client.Caches;
 using Storage.Client.Options;
 using Storage.Client.Storage;
-using Storage.Host;
 using Storage.Host.Storage;
 using System.Collections.Concurrent;
 using DokanOptions = DokanNet.DokanOptions;
@@ -15,16 +15,18 @@ public static class StorageHostExtension
     public static bool StartMinIo(StorageDokan dokan)
         => DokanInstance.Any(x => x.Key == dokan && x.Value.StartMinio);
 
-    public static IServiceCollection AddStorage(this IServiceCollection services)
+    public static IServiceCollection AddStorage(this IServiceCollection services,IConfiguration configuration)
     {
         services.AddSingleton<IDokanOperations, IntegrationOperations>();
+        services.AddSingleton<FileReadCache>();
+        services.Configure<StorageOption>(configuration.GetSection(nameof(StorageOption)));
 
         return services;
     }
     
     public static void UseDokan(this IServiceProvider app, BaseDokanOptions dokanOptions, StorageDokan storageDokan, Action<bool>? succeed = null)
     {
-        _ = Task.Factory.StartNew(() =>
+        _ = Task.Factory.StartNew(async () =>
         {
             if (StartMinIo(storageDokan))
             {
@@ -38,7 +40,7 @@ public static class StorageHostExtension
                 var dokan = new Dokan(new DokanNet.Logging.NullLogger());
 
                 var dokanOperations = app.GetRequiredService<IDokanOperations>() as IntegrationOperations;
-
+                var fileCache = app.GetRequiredService<FileReadCache>();
                 var dokanBuilder = new DokanInstanceBuilder(dokan)
                     .ConfigureLogger(() => new DokanNet.Logging.NullLogger())
                     .ConfigureOptions(options =>
@@ -52,10 +54,10 @@ public static class StorageHostExtension
                 switch (storageDokan)
                 {
                     case StorageDokan.MinIo:
-                        dokanOperations!.Start(new MinioService());
+                        dokanOperations!.Start(new MinioService(fileCache));
                         break;
                     case StorageDokan.Oss:
-                        dokanOperations!.Start(new OssService());
+                        dokanOperations!.Start(new OssService(fileCache));
                         break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(storageDokan), storageDokan, null);

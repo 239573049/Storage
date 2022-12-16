@@ -1,16 +1,12 @@
 ﻿using Aliyun.OSS;
 using DokanNet;
-using Minio;
 using Storage.Client.Caches;
 using Storage.Client.Helpers;
 using Storage.Client.Options;
 using Storage.Host;
-using Storage.Host.Caches;
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
 using System.Security.AccessControl;
 
 namespace Storage.Client.Storage;
@@ -21,10 +17,12 @@ public class OssService : IStorageService, IDisposable
 
     private readonly OssOptions _ossOptions;
     private readonly OssClient _client;
+    private readonly FileReadCache _fileCache;
     private readonly ConcurrentDictionary<string, ReadCache> _readCaches = new();
     private readonly ConcurrentDictionary<string, OssWriteCache> _writeCache = new();
-    public OssService()
+    public OssService(FileReadCache fileCache)
     {
+        _fileCache = fileCache;
         _ossOptions = ConfigHelper.GetOssOptions();
         _client = new OssClient(_ossOptions.Endpoint, _ossOptions.AccessKeyId, _ossOptions.AccessKeySecret);
         _ = Task.Factory.StartNew(StartWriteCache);
@@ -42,7 +40,7 @@ public class OssService : IStorageService, IDisposable
                 {
                     if (_writeCache.TryRemove(t.Key, out var writeCache))
                     {
-                        await Upload(writeCache);
+                        Upload(writeCache);
                     }
                 }
             }
@@ -51,7 +49,7 @@ public class OssService : IStorageService, IDisposable
             }
         }
     }
-    private async Task Upload(OssWriteCache writeCache)
+    private void Upload(OssWriteCache writeCache)
     {
         // TODO:当tag为空时数据是不适合切片的所以需要单独上传
         if (writeCache.Tags == null || writeCache.Tags?.Any() == false)
@@ -64,7 +62,7 @@ public class OssService : IStorageService, IDisposable
 
         var completeMultipartUploadRequest = new CompleteMultipartUploadRequest(_ossOptions.BucketName, writeCache.FileName, writeCache.UploadId);
 
-        foreach (var tag in writeCache.Tags)
+        foreach (var tag in writeCache?.Tags)
         {
             completeMultipartUploadRequest.PartETags.Add(tag);
         }
@@ -90,11 +88,11 @@ public class OssService : IStorageService, IDisposable
         GetPath(ref path);
         try
         {
-            _client.PutObject(_ossOptions.BucketName, path, new MemoryStream());
+            _client.PutObject(_ossOptions.BucketName, path + "/", new MemoryStream());
 
             return true;
         }
-        catch (Exception)
+        catch (Exception e)
         {
             return false;
         }
@@ -121,7 +119,7 @@ public class OssService : IStorageService, IDisposable
 
         Info("{0}=> fileName:{1}  IsDirectory:{2}", nameof(DeleteFile), fileName, info.IsDirectory);
 
-        if (!ExistFile(fileName))
+        if (!ExistFile(fileName + "/"))
             return DokanResult.FileNotFound;
 
         _client.DeleteObject(_ossOptions.BucketName, fileName + "/");
@@ -174,20 +172,20 @@ public class OssService : IStorageService, IDisposable
 
     public NtStatus FindFiles(string filePath, string searchPattern, out IList<FileInformation> files)
     {
-
-
         var name = filePath + "/" + (searchPattern == "*" ? "" : searchPattern);
         name = name.EndsWith('/') ? name : name + '/';
 
         GetPath(ref name);
         if (name.Length <= 1)
         {
-            name = "/";
+            name = "";
         }
         var listObjectsRequest = new ListObjectsRequest(_ossOptions.BucketName)
         {
-            Delimiter = name,
-            MaxKeys = 1000
+            Delimiter = "/",
+            MaxKeys = 1000,
+            Prefix = name,
+
         };
 
         try
@@ -195,7 +193,7 @@ public class OssService : IStorageService, IDisposable
             // 简单列举Bucket中的文件，默认返回100条记录。
             var result = _client.ListObjects(listObjectsRequest);
 
-            files = result.ObjectSummaries.Select(x => new FileInformation()
+            files = result.ObjectSummaries.Where(x => x.Key != name).Select(x => new FileInformation()
             {
                 Attributes = FileAttributes.Normal,
                 FileName = TrimStart(x.Key.TrimEnd('/'), name),
@@ -376,7 +374,7 @@ public class OssService : IStorageService, IDisposable
     }
 
     // 设置上传切片大小
-    const int ReadSize = 1024 * 1024 * 5;
+    const int ReadSize = 1024 * 1024 * 3;
 
     public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
     {
@@ -391,12 +389,12 @@ public class OssService : IStorageService, IDisposable
         else if (offset >= cache?.Offset) // 当需要缓存长度大于需要的长度时进入
         {
             if ((offset - cache.Offset + buffer.Length) < cache.Buffer.Length)
-            {
+        {
                 Info("{0}=> filePath:{1} 缓存 buffer:{2}  offset:{3}", nameof(ReadFile), fileName, buffer.Length, offset);
                 Array.Copy(cache.Buffer, offset - cache.Offset, buffer, 0, buffer.Length);
                 bytesRead = buffer.Length;
-                return NtStatus.Success;
-            }
+            return NtStatus.Success;
+        }
         }
 
         Info("{0}=> filePath:{1}  buffer:{2}  offset:{3}", nameof(ReadFile), fileName, buffer.Length, offset);
@@ -429,13 +427,14 @@ public class OssService : IStorageService, IDisposable
             WriteCache(cache, false);
             _ = Task.Run(async () =>
             {
-                await Upload(cache);
+                Upload(cache);
             });
         }
     }
 
     NtStatus IStorageService.WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
     {
+
         GetPath(ref fileName);
 
         if (offset == 0)
