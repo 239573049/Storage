@@ -17,6 +17,7 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 
 var services = builder.Services;
 services.AddStorage(builder.Configuration);
+services.AddControllers();
 services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", corsBuilder =>
@@ -40,9 +41,9 @@ if (minIoOptions?.StartDefault == true)
     app.Services.UseDokan(minIoOptions, StorageDokan.MinIo);
 }
 
-
 app.UseCors("CorsPolicy");
 app.UseStaticFiles();
+app.MapControllers();
 app.UseApi();
 app.Run();
 
