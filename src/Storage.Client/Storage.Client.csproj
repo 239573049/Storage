@@ -1,41 +1,21 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
-	<PropertyGroup>
-		<OutputType>WinExe</OutputType>
-		<TargetFramework>net7.0-windows</TargetFramework>
-		<Nullable>enable</Nullable>
-		<UseWindowsForms>true</UseWindowsForms>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<UserSecretsId>355c780f-f771-4e16-a8b9-feaa7b0e7f59</UserSecretsId>
-	</PropertyGroup>
-	<ItemGroup>
-		<PackageReference Include="Aliyun.OSS.SDK.NetCore" Version="2.13.0" />
-		<PackageReference Include="DokanNet" Version="2.0.5.1" />
-		<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="7.0.0" />
-		<PackageReference Include="System.ServiceProcess.ServiceController" Version="7.0.0" />
-	</ItemGroup>
-	<ItemGroup>
-		<ProjectReference Include="..\Minio\Minio.csproj" />
-	</ItemGroup>
-	<ItemGroup>
-		<Folder Include="Modules\" />
-</ItemGroup>
-	<ItemGroup>
-	  <Compile Update="Properties\Resources.Designer.cs">
-	    <DesignTime>True</DesignTime>
-	    <AutoGen>True</AutoGen>
-	    <DependentUpon>Resources.resx</DependentUpon>
-	  </Compile>
-	</ItemGroup>
-	<ItemGroup>
-	  <EmbeddedResource Update="Properties\Resources.resx">
-	    <Generator>ResXFileCodeGenerator</Generator>
-	    <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-	  </EmbeddedResource>
-	</ItemGroup>
-	<ItemGroup>
-	  <None Update="appsettings.json">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	</ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="7.0.0" />
+	  <PackageReference Include="Aliyun.OSS.SDK.NetCore" Version="2.13.0" />
+	  <PackageReference Include="DokanNet" Version="2.0.5.1" />
+	  <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="7.0.0" />
+	  <PackageReference Include="System.ServiceProcess.ServiceController" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Minio\Minio.csproj" />
+  </ItemGroup>
 
 </Project>
