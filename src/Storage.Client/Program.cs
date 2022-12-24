@@ -1,5 +1,4 @@
 using Storage.Client.Helpers;
-using Storage.Client.Options;
 using Storage.Client.Storage;
 using System.Runtime.InteropServices;
 
@@ -28,7 +27,7 @@ internal static class Program
 
 
         var services = builder.Services;
-        services.AddStorage();
+        services.AddStorage(builder.Configuration);
 
         var app = builder.Build();
 
@@ -53,7 +52,12 @@ internal static class Program
             Application.Run(new StorageMain());
         });
 
+        app.UseApi();
         app.Run();
+    }
 
+    private static void UseApi(this IEndpointRouteBuilder app)
+    {
+        app.MapPut("/api/minio-config", () => "");
     }
 }

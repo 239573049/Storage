@@ -150,18 +150,10 @@ public class IntegrationOperations : IDokanOperations
     {
         if (info.Context == null)
         {
-            return _storageService.ReadFile(fileName, buffer, out bytesRead, offset, info);
+            return _storageService!.ReadFile(fileName, buffer, out bytesRead, offset, info);
         }
 
         bytesRead = 0;
-
-        //if (info.Context is not FileStream stream) return DokanResult.Success;
-
-        //lock (stream)
-        //{
-        //    stream.Position = offset;
-        //    bytesRead = stream.Read(buffer, 0, buffer.Length);
-        //}
 
         return DokanResult.Success;
     }
