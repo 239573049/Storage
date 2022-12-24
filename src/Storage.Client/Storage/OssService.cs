@@ -154,9 +154,16 @@ public class OssService : IStorageService, IDisposable
         }
 
         path = path.EndsWith("/") ? path : path + '/';
-        var result = _client.DoesObjectExist(_ossOptions.BucketName, path);
+        try
+        {
+            var result = _client.DoesObjectExist(_ossOptions.BucketName, path);
+            return result;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
 
-        return result;
     }
 
     public bool ExistFile(string path)
@@ -167,9 +174,17 @@ public class OssService : IStorageService, IDisposable
             return true;
         }
 
-        var result = _client.DoesObjectExist(_ossOptions.BucketName, path);
+        try
+        {
 
-        return result;
+            var result = _client.DoesObjectExist(_ossOptions.BucketName, path);
+            
+            return result;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
     }
 
     public NtStatus FindFiles(string filePath, string searchPattern, out IList<FileInformation> files)

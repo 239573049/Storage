@@ -42,6 +42,7 @@ public partial class StorageMain : Form
         OssMountPoint.Text = oss.MountPoint;
         OssEndpoint.Text = oss.Endpoint;
         OssStartDefault.Checked = oss.StartDefault;
+        OssVolumeLabel.Text = oss.VolumeLabel;
         OssMapToolStripMenuItem.Text = StorageHostExtension.StartMinIo(StorageDokan.Oss) ? Constant.StopServer : Constant.StartServer;
 
     }
