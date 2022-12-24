@@ -1,9 +1,11 @@
 ﻿using DokanNet;
 using Storage.Client.Caches;
+using Storage.Client.Helpers;
 using Storage.Client.Options;
 using Storage.Client.Storage;
 using Storage.Host.Storage;
 using System.Collections.Concurrent;
+using System.Text.Json.Serialization;
 using DokanOptions = DokanNet.DokanOptions;
 
 namespace Storage.Client;
@@ -12,10 +14,18 @@ public static class StorageHostExtension
 {
     private static readonly ConcurrentDictionary<StorageDokan, StorageDokanInstance> DokanInstance = new();
 
-    public static bool StartMinIo(StorageDokan dokan)
-        => DokanInstance.Any(x => x.Key == dokan && x.Value.StartMinio);
+    public static List<StorageDokanInstance> GetDokanInstance
+    {
+        get
+        {
+            return DokanInstance.Select(x => x.Value).ToList();
+        }
+    }
 
-    public static IServiceCollection AddStorage(this IServiceCollection services,IConfiguration configuration)
+    public static bool StartMinIo(StorageDokan dokan)
+        => DokanInstance.Any(x => x.Key == dokan);
+
+    public static IServiceCollection AddStorage(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<IDokanOperations, IntegrationOperations>();
         services.AddSingleton<FileReadCache>();
@@ -23,58 +33,104 @@ public static class StorageHostExtension
 
         return services;
     }
-    
+
     public static void UseDokan(this IServiceProvider app, BaseDokanOptions dokanOptions, StorageDokan storageDokan, Action<bool>? succeed = null)
     {
-        _ = Task.Factory.StartNew(async () =>
+        if (StartMinIo(storageDokan))
         {
-            if (StartMinIo(storageDokan))
-            {
-                succeed?.Invoke(true);
-                return;
-            }
+            succeed?.Invoke(true);
+            return;
+        }
 
-            try
-            {
-                var manualReset = new ManualResetEvent(false);
-                var dokan = new Dokan(new DokanNet.Logging.NullLogger());
+        try
+        {
+            var manualReset = new ManualResetEvent(false);
+            var dokan = new Dokan(new DokanNet.Logging.NullLogger());
 
-                var dokanOperations = app.GetRequiredService<IDokanOperations>() as IntegrationOperations;
-                var fileCache = app.GetRequiredService<FileReadCache>();
-                var dokanBuilder = new DokanInstanceBuilder(dokan)
-                    .ConfigureLogger(() => new DokanNet.Logging.NullLogger())
-                    .ConfigureOptions(options =>
-                    {
-                        options.Options = DokanOptions.FixedDrive;
-                        options.MountPoint = dokanOptions.MountPoint;
-                        // 是否单线程
-                        options.SingleThread = false;
-                    });
-
-                switch (storageDokan)
+            var dokanOperations = app.GetRequiredService<IDokanOperations>() as IntegrationOperations;
+            var fileCache = app.GetRequiredService<FileReadCache>();
+            var dokanBuilder = new DokanInstanceBuilder(dokan)
+                .ConfigureLogger(() => new DokanNet.Logging.NullLogger())
+                .ConfigureOptions(options =>
                 {
-                    case StorageDokan.MinIo:
-                        dokanOperations!.Start(new MinioService(fileCache));
-                        break;
-                    case StorageDokan.Oss:
-                        dokanOperations!.Start(new OssService(fileCache));
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException(nameof(storageDokan), storageDokan, null);
-                }
+                    options.Options = DokanOptions.FixedDrive;
+                    options.MountPoint = dokanOptions.MountPoint;
+                    // 是否单线程
+                    options.SingleThread = false;
+                });
 
-                DokanInstance.TryAdd(storageDokan, new StorageDokanInstance(dokanBuilder.Build(dokanOperations)));
-
-                succeed?.Invoke(true);
-                manualReset.WaitOne();
-            }
-            catch (Exception e)
+            switch (storageDokan)
             {
-                succeed?.Invoke(false);
-                MessageBox.Show("挂载硬盘驱动错误", e.Message);
+                case StorageDokan.MinIo:
+                    dokanOperations!.Start(new MinioService(fileCache));
+                    break;
+                case StorageDokan.Oss:
+                    dokanOperations!.Start(new OssService(fileCache));
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(storageDokan), storageDokan, null);
             }
+
+            DokanInstance.TryAdd(storageDokan, new StorageDokanInstance(dokanBuilder.Build(dokanOperations), storageDokan));
+
+            succeed?.Invoke(true);
+
+            _ = Task.Factory.StartNew(() =>
+            {
+                manualReset.WaitOne();
+            });
+        }
+        catch (Exception e)
+        {
+            succeed?.Invoke(false);
+        }
+
+
+    }
+
+    public static void UseApi(this IEndpointRouteBuilder app)
+    {
+        // 修改配置信息
+        app.MapPut("/api/minio-config", (MinIoOptions options)
+            => ConfigHelper.SaveMinIoOptions(options));
+
+        // 获取minio配置信息
+        app.MapGet("/api/minio-config", ()
+            => ConfigHelper.GetMinIoOptions());
+
+        // 查看服务列表
+        app.MapGet("/api/server/list", ()
+            => StorageHostExtension.GetDokanInstance);
+
+        // 获取服务状态
+        app.MapGet("/api/server", (StorageDokan dokan) =>
+        {
+            return StorageHostExtension.StartMinIo(dokan);
         });
 
+        // 启动服务
+        app.MapPost("/api/server/start", (IServiceProvider serviceProvider, StorageDokan dokan) =>
+        {
+            BaseDokanOptions options;
+            if (dokan == StorageDokan.MinIo)
+            {
+                options = ConfigHelper.GetMinIoOptions();
+            }
+            else
+            {
+                options = ConfigHelper.GetOssOptions();
+            }
+
+            StorageHostExtension.UseDokan(serviceProvider, options, dokan);
+        });
+
+        // 关闭服务
+        app.MapPost("/api/server/stop", (StorageDokan dokan)
+            => StorageHostExtension.Stop(dokan));
+
+        // 注册win服务
+        app.MapPost("/api/server/window-server", ()
+            => ServerHelper.AddWinServerAsync());
     }
 
     /// <summary>
@@ -98,12 +154,22 @@ public static class StorageHostExtension
 
 public class StorageDokanInstance
 {
+    [JsonIgnore]
     public DokanInstance DokanInstance { get; set; }
 
     public bool StartMinio { get; set; }
 
-    public StorageDokanInstance(DokanInstance dokanInstance)
+    public StorageDokan StorageDokan { get; set; }
+
+    /// <summary>
+    /// 服务启动时间
+    /// </summary>
+    public DateTime CreatedTime { get; set; }
+
+    public StorageDokanInstance(DokanInstance dokanInstance, StorageDokan storageDokan)
     {
         DokanInstance = dokanInstance;
+        StorageDokan = storageDokan;
+        CreatedTime = DateTime.Now;
     }
 }

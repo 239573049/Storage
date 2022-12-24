@@ -1,6 +1,5 @@
 import { Component, ReactNode } from "react";
 import { Tabs } from 'antd';
-import Oss from "../../components/oss";
 import MinIo from "../../components/minio";
 
 class Home extends Component {
@@ -15,10 +14,6 @@ class Home extends Component {
                         label: `MinIo`,
                         key: 'minio',
                         children: <MinIo />,
-                    }, {
-                        label: `Oss`,
-                        key: 'oss',
-                        children: <Oss />
                     }
                 ]}
             />
