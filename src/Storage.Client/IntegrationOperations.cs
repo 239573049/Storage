@@ -1,8 +1,9 @@
-﻿using DokanNet;
-using System.Security.AccessControl;
+﻿using System.Security.AccessControl;
+using DokanNet;
+using Storage.Host;
 using FileAccess = DokanNet.FileAccess;
 
-namespace Storage.Host;
+namespace Storage.Client;
 
 public class IntegrationOperations : IDokanOperations
 {
@@ -15,9 +16,9 @@ public class IntegrationOperations : IDokanOperations
         FileAccess.WriteData | FileAccess.AppendData |
         FileAccess.Delete | FileAccess.GenericWrite;
 
-    private readonly IStorageService _storageService;
+    private IStorageService? _storageService;
 
-    public IntegrationOperations(IStorageService storageService)
+    public void Start(IStorageService? storageService)
     {
         _storageService = storageService;
     }
@@ -38,7 +39,7 @@ public class IntegrationOperations : IDokanOperations
                 switch (mode)
                 {
                     case FileMode.Open:
-                        if (!_storageService.ExistDirectory(fileName))
+                        if (!_storageService!.ExistDirectory(fileName))
                         {
                             return DokanResult.AccessDenied;
                         }
@@ -46,7 +47,7 @@ public class IntegrationOperations : IDokanOperations
                         return DokanResult.Success;
 
                     case FileMode.CreateNew:
-                        if (_storageService.ExistDirectory(fileName))
+                        if (_storageService!.ExistDirectory(fileName))
                             return DokanResult.FileExists;
                         _storageService.CreateDirectory(fileName);
                         break;
@@ -67,7 +68,7 @@ public class IntegrationOperations : IDokanOperations
 
             try
             {
-                pathExists = (_storageService.ExistDirectory(fileName) || _storageService.ExistFile(fileName));
+                pathExists = (_storageService!.ExistDirectory(fileName) || _storageService!.ExistFile(fileName));
             }
             catch (IOException)
             {
@@ -149,18 +150,10 @@ public class IntegrationOperations : IDokanOperations
     {
         if (info.Context == null)
         {
-            return _storageService.ReadFile(fileName, buffer, out bytesRead, offset, info);
+            return _storageService!.ReadFile(fileName, buffer, out bytesRead, offset, info);
         }
 
         bytesRead = 0;
-
-        //if (info.Context is not FileStream stream) return DokanResult.Success;
-
-        //lock (stream)
-        //{
-        //    stream.Position = offset;
-        //    bytesRead = stream.Read(buffer, 0, buffer.Length);
-        //}
 
         return DokanResult.Success;
     }

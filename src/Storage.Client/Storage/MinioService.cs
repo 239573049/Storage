@@ -1,6 +1,7 @@
 ﻿using DokanNet;
 using Minio;
 using Minio.DataModel;
+using Storage.Client.Caches;
 using Storage.Client.Helpers;
 using Storage.Client.Options;
 using System.Collections.Concurrent;
@@ -17,26 +18,27 @@ public class MinioService : IStorageService, IDisposable
     private bool disposable;
     private readonly ConcurrentDictionary<string, MinioWriteCache> _writeCache = new();
 
-    private readonly MinioClient _client;
-    private readonly MinioOptions? _minio;
+    private readonly ConcurrentDictionary<string, ReadCache> _readCaches = new();
 
-    public MinioService()
+    private readonly MinioClient _client;
+    private readonly MinIoOptions _minIo;
+
+    public MinioService(FileReadCache fileCache)
     {
-        _minio = ConfigHelper.GetMinioOptions();
-        
+        _minIo = ConfigHelper.GetMinIoOptions();
         _client = new MinioClient()
-            .WithEndpoint(_minio.Endpoint, _minio.Port)
-            .WithCredentials(_minio.AccessKey, _minio.SecretKey)
+            .WithEndpoint(_minIo.Endpoint, _minIo.Port)
+            .WithCredentials(_minIo.AccessKey, _minIo.SecretKey)
             .Build();
 
         //判断桶是否存在，如果不存在则创建桶，否则上传文件会异常
         var bucketExistsArgs = new BucketExistsArgs();
-        bucketExistsArgs.WithBucket(_minio.BucketName);
+        bucketExistsArgs.WithBucket(_minIo.BucketName);
 
         if (!_client.BucketExistsAsync(bucketExistsArgs).GetAwaiter().GetResult())
         {
             var makeBucketArgs = new MakeBucketArgs();
-            makeBucketArgs.WithBucket(_minio.BucketName);
+            makeBucketArgs.WithBucket(_minIo.BucketName);
             _client.MakeBucketAsync(makeBucketArgs).GetAwaiter().GetResult();
         }
 
@@ -51,7 +53,7 @@ public class MinioService : IStorageService, IDisposable
             var now = DateTime.Now;
             try
             {
-                foreach (var t in _writeCache.Where(x => x.Value.UpdateTime.AddSeconds(3) < now))
+                foreach (var t in _writeCache.Where(x => x.Value.UpdateTime.AddSeconds(1) < now))
                 {
                     if (_writeCache.TryRemove(t.Key, out var writeCache))
                     {
@@ -72,7 +74,7 @@ public class MinioService : IStorageService, IDisposable
         {
             var memoryStream = new MemoryStream(writeCache.MemoryStream.ToArray());
             var args = new PutObjectArgs()
-                .WithBucket(_minio.BucketName)
+                .WithBucket(_minIo.BucketName)
                 .WithObject(writeCache.FileName)
                 .WithStreamData(memoryStream)
                 .WithObjectSize(writeCache.MemoryStream.Length);
@@ -84,7 +86,7 @@ public class MinioService : IStorageService, IDisposable
             false, true);
 
         var completeMultipartUploadArgs = new CompleteMultipartUploadArgs()
-            .WithBucket(_minio.BucketName)
+            .WithBucket(_minIo.BucketName)
             .WithObject(writeCache.FileName)
             .WithUploadId(writeCache.UploadId)
             .WithETags(writeCache.Etags);
@@ -138,7 +140,7 @@ public class MinioService : IStorageService, IDisposable
             return NtStatus.Error;
 
         var o = new RemoveObjectArgs();
-        o.WithBucket(_minio.BucketName);
+        o.WithBucket(_minIo.BucketName);
         o.WithObject(fileName);
         _client.RemoveObjectAsync(o).GetAwaiter().GetResult();
 
@@ -159,12 +161,12 @@ public class MinioService : IStorageService, IDisposable
 
         var o = new ListObjectsArgs();
         o.WithPrefix(fileName);
-        o.WithBucket(_minio.BucketName);
+        o.WithBucket(_minIo.BucketName);
         o.WithRecursive(true);
         foreach (var x in _client.ListObjectsAsync(o).ToList().GetAwaiter().GetResult())
         {
             var args = new RemoveObjectArgs()
-                .WithBucket(_minio.BucketName)
+                .WithBucket(_minIo.BucketName)
                 .WithObject(x.Key);
 
             _client.RemoveObjectAsync(args).GetAwaiter().GetResult();
@@ -180,18 +182,18 @@ public class MinioService : IStorageService, IDisposable
 
         Info("{0}=> oldName:{1}  newName:{2}  IsDirectory:{3}", nameof(MoveFile), oldName, newName, info.IsDirectory);
         var removeObjectArgs = new RemoveObjectArgs();
-        removeObjectArgs.WithBucket(_minio.BucketName);
+        removeObjectArgs.WithBucket(_minIo.BucketName);
         removeObjectArgs.WithObject(oldName);
 
         try
         {
             var cpSrcArgs = new CopySourceObjectArgs()
-                .WithBucket(_minio.BucketName)
+                .WithBucket(_minIo.BucketName)
                 .WithObject(oldName)
                 .WithCopyConditions(null)
                 .WithServerSideEncryption(null);
             var args = new CopyObjectArgs()
-                .WithBucket(_minio.BucketName)
+                .WithBucket(_minIo.BucketName)
                 .WithObject(newName)
                 .WithCopyObjectSource(cpSrcArgs)
                 .WithHeaders(null)
@@ -214,28 +216,32 @@ public class MinioService : IStorageService, IDisposable
         GetPath(ref path);
         GetPath(ref dest);
 
-        var listObjectsArgs = new ListObjectsArgs();
-        listObjectsArgs.WithPrefix(path + "/");
-        listObjectsArgs.WithBucket(_minio.BucketName);
-        listObjectsArgs.WithRecursive(true);
-        var list = _client.ListObjectsAsync(listObjectsArgs).ToList().GetAwaiter().GetResult().ToList();
+        var cpSrcArgs = new CopySourceObjectArgs()
+            .WithBucket(_minIo.BucketName)
+            .WithObject(path + '/')
+            .WithCopyConditions(null)
+            .WithServerSideEncryption(null);
 
-        foreach (var item in list)
+        var args = new CopyObjectArgs()
+            .WithBucket(_minIo.BucketName)
+            .WithObject(dest + '/')
+            .WithCopyObjectSource(cpSrcArgs)
+            .WithHeaders(null)
+            .WithServerSideEncryption(null);
+
+        var removeObjectArgs = new RemoveObjectArgs();
+        removeObjectArgs.WithBucket(_minIo.BucketName);
+        removeObjectArgs.WithObject(path + '/');
+
+        try
         {
-            var removeObjectArgs = new RemoveObjectArgs();
-            removeObjectArgs.WithBucket(_minio.BucketName);
-            removeObjectArgs.WithObject(item.Key);
-            
-            try
-            {
-                _client.CopyObjectAsync(_minio.BucketName, item.Key, _minio.BucketName,
-                        item.Key.Replace(path + "/", dest + "/"))
-                    .GetAwaiter()
-                    .GetResult();
-            }
-            catch (Exception e)
-            {
-            }
+            _client.CopyObjectAsync(args).GetAwaiter().GetResult();
+            _client.RemoveObjectAsync(removeObjectArgs).GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            Error("MoveDirectory exception :{0}", exception);
+            return false;
         }
 
         var removeObjects = new RemoveObjectsArgs();
@@ -262,11 +268,9 @@ public class MinioService : IStorageService, IDisposable
             return DokanResult.Success;
         }
 
-
-
         Info("{0}=> fileName:{1}  IsDirectory:{2}", nameof(GetFileInformation), fileName, info.IsDirectory);
         var o = new ListObjectsArgs();
-        o.WithBucket(_minio.BucketName);
+        o.WithBucket(_minIo.BucketName);
         o.WithPrefix(fileName);
         o.WithRecursive(false);
 
@@ -304,7 +308,7 @@ public class MinioService : IStorageService, IDisposable
 
         Info("{0}=> filePath:{1}  searchPattern:{2}", nameof(FindFiles), filePath, searchPattern);
         var o = new ListObjectsArgs();
-        o.WithBucket(_minio.BucketName);
+        o.WithBucket(_minIo.BucketName);
 
         var name = filePath + "/" + (searchPattern == "*" ? "" : searchPattern);
         name = name.EndsWith('/') ? name : name + '/';
@@ -355,7 +359,7 @@ public class MinioService : IStorageService, IDisposable
         Info("{0}=> filePath:{1}  buffer:{2}  offset:{3}", nameof(ReadFile), fileName, buffer.Length, offset);
 
         var obj = new GetObjectArgs();
-        obj.WithBucket(_minio.BucketName);
+        obj.WithBucket(_minIo.BucketName);
         obj.WithObject(fileName);
         // 当buffer大于切片大小直接使用buffer长度
         obj.WithOffsetAndLength(offset, buffer.Length > ReadSize ? buffer.Length : ReadSize);
@@ -383,21 +387,6 @@ public class MinioService : IStorageService, IDisposable
         return NtStatus.Success;
     }
 
-    private readonly ConcurrentDictionary<string, ReadCache>
-        _readCaches = new();
-
-    class ReadCache
-    {
-        public int Offset { get; set; }
-
-        public byte[] Buffer { get; set; }
-
-        public ReadCache(int offset)
-        {
-            Offset = offset;
-            Buffer = Array.Empty<byte>();
-        }
-    }
 
     public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
     {
@@ -426,7 +415,7 @@ public class MinioService : IStorageService, IDisposable
             {
                 // TODO: 如果第一次上传大于切片将提交第一次切片
                 var multipartUploadArgs = new NewMultipartUploadPutArgs()
-                    .WithBucket(_minio.BucketName)
+                    .WithBucket(_minIo.BucketName)
                     .WithContentType(null)
                     .WithObject(fileName);
 
@@ -479,7 +468,7 @@ public class MinioService : IStorageService, IDisposable
             if (string.IsNullOrEmpty(writeCache.UploadId))
             {
                 var multipartUploadArgs = new NewMultipartUploadPutArgs()
-                    .WithBucket(_minio.BucketName)
+                    .WithBucket(_minIo.BucketName)
                     .WithContentType(null)
                     .WithObject(writeCache.FileName);
 
@@ -513,7 +502,7 @@ public class MinioService : IStorageService, IDisposable
     {
         var put = new PutObjectPartArgs();
 
-        put.WithBucket(_minio.BucketName)
+        put.WithBucket(_minIo.BucketName)
             .WithObject(fileName)
             .WithObjectSize(length);
 
@@ -531,7 +520,7 @@ public class MinioService : IStorageService, IDisposable
 
         var millstream = new MemoryStream(Encoding.UTF8.GetBytes(" "));
         var put = new PutObjectArgs();
-        put.WithBucket(_minio.BucketName);
+        put.WithBucket(_minIo.BucketName);
         put.WithObjectSize(millstream.Length);
         put.WithStreamData(millstream);
         put.WithObject(path);
@@ -563,7 +552,7 @@ public class MinioService : IStorageService, IDisposable
         }
         Info("{0}=> path:{1} ", nameof(ExistFile), path);
         var o = new ListObjectsArgs();
-        o.WithBucket(_minio.BucketName);
+        o.WithBucket(_minIo.BucketName);
         o.WithPrefix(path);
         try
         {
@@ -594,7 +583,7 @@ public class MinioService : IStorageService, IDisposable
             var put = new PutObjectArgs();
             put.WithObjectSize(stream.Length);
             put.WithStreamData(stream);
-            put.WithBucket(_minio.BucketName);
+            put.WithBucket(_minIo.BucketName);
             put.WithObject(path + "/.desktop");
             put.WithContentType("application/octet-stream");
             _client.PutObjectAsync(put).GetAwaiter().GetResult();
@@ -623,7 +612,7 @@ public class MinioService : IStorageService, IDisposable
     public void GetVolumeInformation(out string volumeLabel, out FileSystemFeatures features, out string fileSystemName,
         out uint maximumComponentLength, IDokanFileInfo info)
     {
-        volumeLabel = _minio.VolumeLabel;
+        volumeLabel = _minIo.VolumeLabel;
         fileSystemName = "NTFS";
         maximumComponentLength = 256;
         features = FileSystemFeatures.CasePreservedNames | FileSystemFeatures.CaseSensitiveSearch |
@@ -657,15 +646,10 @@ public class MinioService : IStorageService, IDisposable
             return true;
         }
 
-        if (path.EndsWith("HEAD"))
-        {
-            return false;
-        }
-
         Info("{0}=> path:{1} ", nameof(ExistDirectory), path);
 
         var o = new ListObjectsArgs();
-        o.WithBucket(_minio.BucketName);
+        o.WithBucket(_minIo.BucketName);
         o.WithPrefix(path);
         try
         {
@@ -683,7 +667,7 @@ public class MinioService : IStorageService, IDisposable
         }
     }
 
-    public static string TrimStart(string value, string search)
+    private static string TrimStart(string value, string search)
     {
         if (value.StartsWith(search))
         {
