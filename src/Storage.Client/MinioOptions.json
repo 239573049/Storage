@@ -1,8 +1,0 @@
-{
-  "AccessKey": "token",
-  "SecretKey": "Aa123456.",
-  "BucketName": "storage",
-  "Endpoint": "minio.com",
-  "Port": 9000,
-  "VolumeLabel": "Token"
-}

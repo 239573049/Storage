@@ -5,36 +5,36 @@ namespace Storage.Client.Helpers;
 
 public class ConfigHelper
 {
-    public static DokanOptions? GetDokanOptions()
-    {
-        if (File.Exists(nameof(DokanOptions) + ".json"))
-        {
-            return JsonSerializer.Deserialize<DokanOptions>(File.ReadAllText(nameof(DokanOptions) + ".json"));
-        }
 
-        return new DokanOptions();
+    public static MinIoOptions? GetMinIoOptions()
+    {
+        return File.Exists(nameof(MinIoOptions) + ".json") ? JsonSerializer.Deserialize<MinIoOptions>(File.ReadAllText(nameof(MinIoOptions) + ".json")) : new MinIoOptions();
     }
 
-    public static void SaveDokanOptions(DokanOptions value)
+    public static void SaveMinIoOptions(MinIoOptions value)
     {
-        using var fileStream = File.Open(nameof(DokanOptions) + ".json", FileMode.Create);
+        using var fileStream = File.Open(nameof(MinIoOptions) + ".json", FileMode.Create);
         fileStream.Position = 0;
         fileStream.Write(JsonSerializer.SerializeToUtf8Bytes(value));
         fileStream.Flush();
         fileStream.Close();
     }
 
-    public static MinioOptions? GetMinioOptions()
+    public static void SaveOssOptions(OssOptions value)
     {
-        return File.Exists(nameof(MinioOptions) + ".json") ? JsonSerializer.Deserialize<MinioOptions>(File.ReadAllText(nameof(MinioOptions) + ".json")) : new MinioOptions();
-    }
-
-    public static void SaveMinioOptions(MinioOptions value)
-    {
-        using var fileStream = File.Open(nameof(MinioOptions) + ".json", FileMode.Create);
+        using var fileStream = File.Open(nameof(OssOptions) + ".json", FileMode.Create);
         fileStream.Position = 0;
         fileStream.Write(JsonSerializer.SerializeToUtf8Bytes(value));
         fileStream.Flush();
         fileStream.Close();
+    }
+ 
+    /// <summary>
+    /// 获取Oss配置
+    /// </summary>
+    /// <returns></returns>
+    public static OssOptions? GetOssOptions()
+    {
+        return File.Exists(nameof(OssOptions) + ".json") ? JsonSerializer.Deserialize<OssOptions>(File.ReadAllText(nameof(OssOptions) + ".json")) : new OssOptions();
     }
 }

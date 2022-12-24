@@ -2,7 +2,7 @@
 
 namespace Storage.Client.Options;
 
-public class DokanOptions
+public abstract class BaseDokanOptions
 {
     /// <summary>
     /// 挂载点
