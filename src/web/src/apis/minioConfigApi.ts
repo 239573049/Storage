@@ -10,4 +10,4 @@ class MinioConfigApi {
     }
 }
 
-export default new MinioConfigApi
+export default new MinioConfigApi()

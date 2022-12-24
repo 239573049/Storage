@@ -1,4 +1,4 @@
-import { Avatar, Button, List, message } from "antd";
+import { Button, List, message } from "antd";
 import { Component, ReactNode } from "react";
 import serverApi from "../../apis/serverApi";
 

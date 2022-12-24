@@ -23,4 +23,4 @@ class ServerApi {
     }
 }
 
-export default new ServerApi
+export default new ServerApi()

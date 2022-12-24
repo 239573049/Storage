@@ -1,5 +1,5 @@
 import { Component, ReactNode } from "react";
-import { Card, Form, Input, Button, InputNumber, Switch, Collapse, message, Tag } from "antd";
+import { Card, Input, Button, InputNumber, Switch, Collapse, message, Tag } from "antd";
 import { MinIoDto } from "../../module/minio";
 import MinioConfigApi from "../../apis/minioConfigApi";
 import style from './index.less'
