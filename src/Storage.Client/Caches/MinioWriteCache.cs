@@ -1,4 +1,4 @@
-﻿namespace Storage.Host.Caches;
+﻿namespace Storage.Client.Caches;
 
 public class MinioWriteCache
 {
@@ -14,4 +14,5 @@ public class MinioWriteCache
     public Dictionary<int, string> Etags = new();
 
     public DateTime UpdateTime { get; set; }
+
 }

@@ -4,12 +4,12 @@ using Minio.DataModel;
 using Storage.Client.Caches;
 using Storage.Client.Helpers;
 using Storage.Client.Options;
-using Storage.Host.Caches;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reactive.Linq;
 using System.Security.AccessControl;
 using System.Text;
+using Storage.Client.Caches;
 
 namespace Storage.Host.Storage;
 
@@ -244,6 +244,11 @@ public class MinioService : IStorageService, IDisposable
             return false;
         }
 
+        var removeObjects = new RemoveObjectsArgs();
+        removeObjects.WithBucket(_minio.BucketName);
+        removeObjects.WithObjects(list.Select(x => x.Key).ToList());
+        _client.RemoveObjectsAsync(removeObjects).GetAwaiter().GetResult();
+
         return true;
     }
 
@@ -327,7 +332,7 @@ public class MinioService : IStorageService, IDisposable
 
 
     // 设置上传切片大小
-    const int ReadSize = 1024 * 1024 * 5;
+    private const int ReadSize = 1024 * 1024 * 10;
 
     public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
     {
@@ -403,7 +408,6 @@ public class MinioService : IStorageService, IDisposable
                     FileName = fileName,
                     MemoryStream = memoryStream,
                     UpdateTime = DateTime.Now,
-                    Etags = new Dictionary<int, string>()
                 };
                 _writeCache.TryAdd(fileName, writeCache);
             }
