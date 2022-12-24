@@ -238,11 +238,6 @@ public class MinioService : IStorageService, IDisposable
             }
         }
 
-        var removeObjects = new RemoveObjectsArgs();
-        removeObjects.WithBucket(_minio.BucketName);
-        removeObjects.WithObjects(list.Select(x => x.Key).ToList());
-        _client.RemoveObjectsAsync(removeObjects).GetAwaiter().GetResult();
-
         return true;
     }
 
